@@ -36,10 +36,15 @@ export async function sendMail(msg: Mail) {
     if (env().NODE_ENV === "test") {
       testOutbox.push(msg);
     } else if (devToolsAllowed()) {
-      await mkdir(devMailDir(), { recursive: true });
-      const file = `${Date.now()}-${randomUUID().slice(0, 8)}.json`;
-      await writeFile(path.join(devMailDir(), file), JSON.stringify({ ...msg, sentAt: new Date().toISOString() }));
-      console.info(`[mail:dev] To: ${msg.to} — ${msg.subject} (saved to dev mailbox)`);
+      try {
+        await mkdir(devMailDir(), { recursive: true });
+        const file = `${Date.now()}-${randomUUID().slice(0, 8)}.json`;
+        await writeFile(path.join(devMailDir(), file), JSON.stringify({ ...msg, sentAt: new Date().toISOString() }));
+        console.info(`[mail:dev] To: ${msg.to} — ${msg.subject} (saved to dev mailbox)`);
+      } catch {
+        // Read-only filesystem (e.g. serverless): log the mail instead.
+        console.info(`[mail:dev] To: ${msg.to}\nSubject: ${msg.subject}\n\n${msg.text}`);
+      }
     } else {
       console.warn(`[mail] SMTP_URL not configured — email to ${msg.to} not sent: ${msg.subject}`);
     }

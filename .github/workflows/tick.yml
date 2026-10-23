@@ -1,0 +1,23 @@
+# Calls the app's background job every 5 minutes (waitlist offer expiry, DUPR
+# syncs, data retention). Works with any host. Needs two repository secrets:
+#   APP_URL      e.g. https://traening.example.dk
+#   CRON_SECRET  the same value as the app's CRON_SECRET
+# GitHub may delay scheduled runs by a few minutes; that's fine for this job.
+name: Background tick
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call /api/cron/tick
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$APP_URL" || { echo "APP_URL secret missing"; exit 1; }
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/cron/tick"

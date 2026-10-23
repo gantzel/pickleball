@@ -44,7 +44,8 @@ To simulate DUPR locally, open **/dev/mock-dupr**: change a test player's rating
 | `npm run db:migrate` | Apply migrations (also creates the settings row) |
 | `npm run db:seed` | Demo levels, mock players, users and sessions (`is_demo = true`) |
 | `npm run admin:grant -- email [--revoke]` | Grant/revoke admin. The only way to create the first admin |
-| `npm run tick` | Run background jobs once (offer expiry + due DUPR syncs) |
+| `npm run tick` | Run background jobs once (offer expiry, due DUPR syncs, retention) |
+| `npm run storage:copy` | Copy profile photos between storages (see docs/DEPLOY.md) |
 | `npm run lint` / `typecheck` / `test` / `e2e` | Quality checks |
 
 ## Environment variables
@@ -112,21 +113,15 @@ Call `/api/cron/tick` every ~5 minutes with `Authorization: Bearer $CRON_SECRET`
 
 ## Deployment
 
-The app is a standard Next.js server with a Postgres database.
+Step-by-step guide (free setup: Vercel + Neon + Cloudflare R2 + Brevo + GitHub Actions, your own domain) and how to move each piece to another provider later: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
-1. Provision PostgreSQL and a persistent volume for `UPLOAD_DIR`.
-2. Set environment variables (production: `DUPR_PROVIDER=none` until the live integration exists, `DEMO_MODE=false`, real `APP_URL` over HTTPS, `SMTP_URL`).
-3. `npm ci && npm run db:migrate && npm run build && npm start` (port 3000, behind TLS).
-4. `npm run admin:grant -- you@example.com` after registering your account.
-5. Schedule the cron tick.
-
-Serverless hosts work for the app, but profile photos need persistent storage: either a host with a disk/volume, or replace `src/server/uploads.ts` with an object-storage implementation (the module is the only place files are read/written). Run migrations as a release step.
+In short: any Node.js 20+ host works (`npm ci && npm run db:migrate && npm run build && npm start`). Profile photos use `STORAGE_DRIVER=local` (persistent disk) or `s3` (any S3-compatible bucket; required on serverless hosts). `npm run storage:copy` moves photos between storages; `pg_dump`/`pg_restore` moves the database. `/api/health` reports whether the app can reach its database.
 
 ## Testing
 
 ```bash
 createdb pbk_test            # or set TEST_DATABASE_URL
-npm test                     # 69 integration tests against Postgres (schema rebuilt per run)
+npm test                     # 73 integration tests against Postgres (schema rebuilt per run)
 npm run lint && npm run typecheck && npm run build
 # e2e: start the app with the mock provider + seed, then
 CHROME_PATH=/path/to/chrome npm run e2e   # desktop + mobile flows, screenshots in e2e/screenshots

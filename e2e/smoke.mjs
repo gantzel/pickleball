@@ -11,7 +11,10 @@
  */
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import puppeteer from "puppeteer-core";
+import sharp from "sharp";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const OUT = process.env.SHOT_DIR ?? "e2e/screenshots";
@@ -80,6 +83,15 @@ async function memberFlow(name, vp) {
   await page.goto(verifyUrl, { waitUntil: "networkidle0" });
   assert.match(page.url(), /\/profil\?velkommen=1/);
   await waitForText(page, "Din e-mail er bekræftet");
+
+  // Upload a profile photo and check it is served back.
+  const photo = path.join(tmpdir(), `pbk-e2e-${run}.png`);
+  await sharp({ create: { width: 640, height: 480, channels: 3, background: "#3a7d5c" } }).png().toFile(photo);
+  const input = await page.$("#avatar");
+  await input.uploadFile(photo);
+  await clickText(page, "button", "Upload billede");
+  await waitForText(page, "Profilbilledet er opdateret.");
+  await page.waitForFunction(() => [...document.images].some((i) => i.src.includes("/api/avatars/") && i.complete && i.naturalWidth > 0), { timeout: 10000 });
 
   // No way to type a rating anywhere on the profile.
   assert.equal(await page.$("input[name*=rating i]"), null, "profile must not expose a rating input");

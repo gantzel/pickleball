@@ -23,7 +23,14 @@ const EnvSchema = z.object({
   DUPR_WEBHOOK_SECRET: z.string().optional(),
 
   CRON_SECRET: z.string().min(12).optional(),
+  /** local = UPLOAD_DIR on disk (needs a persistent disk); s3 = any S3-compatible bucket. */
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   UPLOAD_DIR: z.string().default("./storage/avatars"),
+  S3_ENDPOINT: z.string().url().optional().or(z.literal("")),
+  S3_REGION: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
   SMTP_URL: z.string().optional(),
   MAIL_FROM: z.string().default("Pickleball København <no-reply@example.com>"),
 });

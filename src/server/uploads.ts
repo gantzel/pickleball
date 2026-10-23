@@ -2,17 +2,17 @@
  * Avatar storage. Uploads are validated by magic bytes (not the declared
  * MIME type), size-limited, decoded and re-encoded by sharp to a 512×512
  * WebP. Re-encoding strips EXIF/GPS metadata and any embedded payloads.
- * Files live outside /public and are served only to logged-in members.
+ * Files go to the configured storage (local disk or S3-compatible bucket,
+ * see storage.ts) and are served only to logged-in members.
  */
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
-import { env } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
+import { storage } from "./storage";
 
+export const AVATAR_KEY_RE = /^[0-9a-f-]{36}\.webp$/;
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
-const KEY_RE = /^[0-9a-f-]{36}\.webp$/;
+const KEY_RE = AVATAR_KEY_RE;
 
 function sniff(buf: Buffer): "jpeg" | "png" | "webp" | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpeg";
@@ -20,8 +20,6 @@ function sniff(buf: Buffer): "jpeg" | "png" | "webp" | null {
   if (buf.length >= 12 && buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
   return null;
 }
-
-const dir = () => path.resolve(env().UPLOAD_DIR);
 
 export async function processAvatar(bytes: Buffer): Promise<string> {
   if (bytes.length === 0) throw new DomainError("VALIDATION", "Filen er tom.");
@@ -38,21 +36,21 @@ export async function processAvatar(bytes: Buffer): Promise<string> {
     throw new DomainError("VALIDATION", "Billedet kunne ikke læses. Prøv et andet.");
   }
   const key = `${randomUUID()}.webp`;
-  await mkdir(dir(), { recursive: true });
-  await writeFile(path.join(dir(), key), out, { mode: 0o640 });
+  try {
+    await storage().put(key, out, "image/webp");
+  } catch (e) {
+    console.error("[storage] upload failed — check STORAGE_DRIVER / S3_* settings", e instanceof Error ? e.message : e);
+    throw new DomainError("INTEGRATION_UNAVAILABLE", "Billedet kunne ikke gemmes lige nu. Prøv igen senere.");
+  }
   return key;
 }
 
 export async function readAvatar(key: string): Promise<Buffer | null> {
   if (!KEY_RE.test(key)) return null; // also prevents path traversal
-  try {
-    return await readFile(path.join(dir(), key));
-  } catch {
-    return null;
-  }
+  return storage().get(key);
 }
 
 export async function deleteAvatarFile(key: string) {
   if (!KEY_RE.test(key)) return;
-  await unlink(path.join(dir(), key)).catch(() => undefined);
+  await storage().delete(key).catch((e) => console.warn("[storage] delete failed", key, e instanceof Error ? e.message : e));
 }

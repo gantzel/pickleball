@@ -14,9 +14,11 @@
     "db:seed": "tsx --env-file-if-exists=.env scripts/seed-demo.ts",
     "admin:grant": "tsx --env-file-if-exists=.env scripts/grant-admin.ts",
     "tick": "tsx --env-file-if-exists=.env scripts/tick.ts",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "storage:copy": "tsx scripts/copy-files.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1156.0",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/figtree": "^5.3.0",
     "better-auth": "^1.7.12",
@@ -43,6 +45,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.5.28",
     "puppeteer-core": "^25.16.0",
+    "s3rver": "^3.7.1",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",
