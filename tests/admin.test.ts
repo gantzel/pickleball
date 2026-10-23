@@ -4,7 +4,8 @@ import { db } from "@/db";
 import { auditEvent, booking, duprLink, notification, trainingSession } from "@/db/schema";
 import { adminMetrics, getSessionAdmin, listSessionsAdmin, cancelSession, completeSession, createSession, duplicateSession, publishSession, updateSession } from "@/server/sessions";
 import { adminCancelBooking, adminSetAttendance, bookSession } from "@/server/bookings";
-import { deleteLevel, getMemberAdmin, listAudit, listSyncProblems, saveLevel, searchMembers, updateSettings } from "@/server/admin";
+import { deleteLevel, getMemberAdmin, listAudit, listSyncProblems, saveLevel, searchMembers, setMemberRole, updateSettings } from "@/server/admin";
+import { user } from "@/db/schema";
 import { adminRetrySync } from "@/server/dupr/sync";
 import { GET as cronGET } from "@/app/api/cron/tick/route";
 import { linkWithRating, makeSession, makeUser, resetDb } from "./helpers";
@@ -55,6 +56,7 @@ describe("non-admins are forbidden from every admin function", () => {
       () => listSyncProblems(m),
       () => listAudit(m),
       () => adminRetrySync(m, "x"),
+      () => setMemberRole(m, m.id, "ADMIN"),
     ];
     for (const call of calls) await expect(call()).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect((await db.select().from(trainingSession)).length).toBe(1);
@@ -163,5 +165,37 @@ describe("admin session management", () => {
     await expect(saveLevel(admin, null, { name: "Øvet", minRating: 3.5, maxRating: 3.0, color: "#2f6b4f" })).rejects.toMatchObject({ code: "VALIDATION" });
     const l = await saveLevel(admin, null, { name: "Øvet", minRating: 3.0, maxRating: 3.75, color: "#2f6b4f" });
     expect(l.name).toBe("Øvet");
+  });
+});
+
+describe("admin roles", () => {
+  const roleOf = async (id: string) => (await db.select({ role: user.role }).from(user).where(eq(user.id, id)))[0].role;
+
+  it("an admin can promote and demote members, with audit and notification", async () => {
+    const admin = await makeUser("ADMIN");
+    const m = await makeUser();
+    await setMemberRole(admin, m.id, "ADMIN");
+    expect(await roleOf(m.id)).toBe("ADMIN");
+    await setMemberRole(admin, m.id, "MEMBER");
+    expect(await roleOf(m.id)).toBe("MEMBER");
+    const actions = (await db.select().from(auditEvent)).map((e) => e.action);
+    expect(actions).toEqual(expect.arrayContaining(["role.grant_admin", "role.revoke_admin"]));
+    const notes = await db.select().from(notification).where(eq(notification.userId, m.id));
+    expect(notes.map((n) => n.type)).toEqual(expect.arrayContaining(["ROLE_ADMIN_GRANTED", "ROLE_ADMIN_REVOKED"]));
+  });
+
+  it("admins can't change their own role", async () => {
+    const admin = await makeUser("ADMIN");
+    await expect(setMemberRole(admin, admin.id, "MEMBER")).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await roleOf(admin.id)).toBe("ADMIN");
+  });
+
+  it("always keeps at least one admin, even with simultaneous demotions", async () => {
+    const a = await makeUser("ADMIN");
+    const b = await makeUser("ADMIN");
+    const results = await Promise.allSettled([setMemberRole(a, b.id, "MEMBER"), setMemberRole(b, a.id, "MEMBER")]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const remaining = await db.select().from(user).where(eq(user.role, "ADMIN"));
+    expect(remaining).toHaveLength(1);
   });
 });

@@ -21,7 +21,8 @@ async function ensureUser(email: string, name: string, role: "MEMBER" | "ADMIN")
     await auth.api.signUpEmail({ body: { email, name, password: DEMO_PASSWORD } });
     [u] = await db.select().from(user).where(eq(user.email, email));
   }
-  if (u.role !== role) await db.update(user).set({ role }).where(eq(user.id, u.id));
+  // Demo accounts skip email verification.
+  if (u.role !== role || !u.emailVerified) await db.update(user).set({ role, emailVerified: true }).where(eq(user.id, u.id));
   return u;
 }
 

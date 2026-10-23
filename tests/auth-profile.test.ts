@@ -6,6 +6,7 @@ import { booking, duprLink, ratingSnapshot, user } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { bookSession, joinWaitlist } from "@/server/bookings";
 import { deleteAccount, updateAvatar, updateProfile } from "@/server/members";
+import { testOutbox } from "@/server/mailer";
 import { readAvatar } from "@/server/uploads";
 import { linkWithRating, makeSession, makeUser, resetDb } from "./helpers";
 
@@ -20,28 +21,54 @@ const authReq = (path: string, body: unknown, cookie?: string) =>
     }),
   );
 
+/** Opens the verification link from the last email sent to `email`; returns the session cookie it sets. */
+async function verifyEmail(email: string) {
+  const mail = [...testOutbox].reverse().find((m) => m.to === email && m.subject.startsWith("Bekræft"));
+  expect(mail, `verification email to ${email}`).toBeTruthy();
+  const url = mail!.text.match(/https?:\/\/\S+/)![0];
+  const res = await auth.handler(new Request(url, { headers: { origin: "http://localhost:3000" } }));
+  expect([302, 307]).toContain(res.status);
+  return res;
+}
+
 describe("registration and login", () => {
-  it("a member can register, log in and get a session; role can't be chosen at sign-up", async () => {
-    const res = await authReq("/sign-up/email", { email: "ny@test.local", password: "korrekt-hest-batteri", name: "Ny Spiller", role: "ADMIN" });
+  it("registers, requires email verification, then logs in; role can't be chosen at sign-up", async () => {
+    const res = await authReq("/sign-up/email", { email: "ny@test.local", password: "korrekt-hest-batteri", name: "Ny Spiller", role: "ADMIN", callbackURL: "/bekraeftet" });
     expect([200, 400, 422]).toContain(res.status);
-    const [u] = await db.select().from(user).where(eq(user.email, "ny@test.local"));
-    if (res.status === 200) {
-      expect(u.role).toBe("MEMBER");
-    } else {
-      expect(u).toBeUndefined(); // extra field rejected outright — also acceptable
-      const ok = await authReq("/sign-up/email", { email: "ny@test.local", password: "korrekt-hest-batteri", name: "Ny Spiller" });
+    if (res.status !== 200) {
+      const ok = await authReq("/sign-up/email", { email: "ny@test.local", password: "korrekt-hest-batteri", name: "Ny Spiller", callbackURL: "/bekraeftet" });
       expect(ok.status).toBe(200);
     }
     const [created] = await db.select().from(user).where(eq(user.email, "ny@test.local"));
     expect(created.role).toBe("MEMBER");
+    expect(created.emailVerified).toBe(false);
+
+    // Unverified: login refused (and a new link is sent).
+    const early = await authReq("/sign-in/email", { email: "ny@test.local", password: "korrekt-hest-batteri", callbackURL: "/bekraeftet" });
+    expect(early.status).toBe(403);
+    expect((await early.json()).code).toBe("EMAIL_NOT_VERIFIED");
+
+    // Clicking the link verifies, signs in and redirects to the callback page.
+    const verified = await verifyEmail("ny@test.local");
+    expect(verified.headers.get("location")).toContain("/bekraeftet");
+    expect(verified.headers.get("set-cookie")).toContain("better-auth.session_token");
+    const [after] = await db.select().from(user).where(eq(user.email, "ny@test.local"));
+    expect(after.emailVerified).toBe(true);
 
     const login = await authReq("/sign-in/email", { email: "ny@test.local", password: "korrekt-hest-batteri" });
     expect(login.status).toBe(200);
-    const cookie = login.headers.get("set-cookie");
-    expect(cookie).toContain("better-auth.session_token");
+    expect(login.headers.get("set-cookie")).toContain("better-auth.session_token");
 
     const bad = await authReq("/sign-in/email", { email: "ny@test.local", password: "forkert-kode-123" });
     expect(bad.status).toBe(401);
+  });
+
+  it("does not reveal whether an email is already registered", async () => {
+    const a = await authReq("/sign-up/email", { email: "dobbelt@test.local", password: "korrekt-hest-batteri", name: "A" });
+    const b = await authReq("/sign-up/email", { email: "dobbelt@test.local", password: "korrekt-hest-batteri", name: "B" });
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(await db.select().from(user).where(eq(user.email, "dobbelt@test.local"))).toHaveLength(1);
   });
 
   it("rejects short passwords", async () => {
@@ -51,6 +78,7 @@ describe("registration and login", () => {
 
   it("the auth API cannot be used to change role", async () => {
     await authReq("/sign-up/email", { email: "r@test.local", password: "korrekt-hest-batteri", name: "R" });
+    await verifyEmail("r@test.local");
     const login = await authReq("/sign-in/email", { email: "r@test.local", password: "korrekt-hest-batteri" });
     const cookie = login.headers.get("set-cookie")!.split(";")[0];
     await authReq("/update-user", { role: "ADMIN", name: "R2" }, cookie);

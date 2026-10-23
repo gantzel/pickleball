@@ -31,6 +31,8 @@ npm run dev                   # http://localhost:3000
 
 Demo logins after seeding (password `demo-pickleball-2026`): `admin@demo.pbk.local`, `anna@demo.pbk.local` (3.412), `mads@demo.pbk.local` (2.874), `sofie@demo.pbk.local` (3.968).
 
+Without `SMTP_URL`, emails (sign-up verification, password reset, notifications) land in the **dev mailbox at /dev/mail** instead of being sent.
+
 To simulate DUPR locally, open **/dev/mock-dupr**: change a test player's rating or make DUPR fail (server error, rate limit, revoked, no rating), then "Send rating-webhook". This page and its actions return 404 in production unless `DEMO_MODE=true`.
 
 ### Scripts
@@ -58,8 +60,9 @@ See [.env.example](.env.example) (placeholders only). Key ones:
 
 ## Authentication & roles
 
-- Email + password (min. 10 characters), DB sessions (30 days, sliding), password reset by emailed link (1 hour, revokes other sessions). Sign-in, sign-up and reset endpoints are rate limited in Postgres.
-- Roles: `MEMBER` and `ADMIN`. The `role` column is not exposed to the auth library, so it can't be set through sign-up or profile updates. Grant admins with `npm run admin:grant -- email` (audited).
+- Email + password (min. 10 characters), DB sessions (30 days, sliding), password reset by emailed link (1 hour, revokes other sessions). Sign-in, sign-up, reset and resend-verification endpoints are rate limited in Postgres.
+- **Email verification is required.** Sign-up sends a link (valid 24 hours); the account can't log in until it's clicked. The link signs the member in and lands on `/bekraeftet` → `/profil` to link DUPR. Logging in unverified re-sends the link. Sign-up never reveals whether an email is already registered. Demo-seeded accounts are pre-verified.
+- Roles: `MEMBER` and `ADMIN`. The `role` column is not exposed to the auth library, so it can't be set through sign-up or profile updates. Create the first admin with `npm run admin:grant -- email`; after that admins grant/revoke the role under **Admin → Medlemmer → member**. Admins can't change their own role, and the club always keeps at least one admin (enforced with row locks). Every change is audited and the member is notified.
 - Every page, server action and API route resolves the user server-side; services take an `actor` and enforce ownership/role themselves. The middleware redirect is only a convenience.
 - Account deletion (Profil → Slet konto, password + "SLET" confirmation): removes name, email, photo, credentials, sessions, DUPR link, rating snapshots, notifications and achievements immediately; cancels upcoming bookings (places go to the waitlist); keeps past bookings anonymised for attendance statistics.
 
@@ -97,7 +100,15 @@ All admin-configurable under **Admin → Regler**; changes are audited.
 
 ## Background jobs
 
-Call `/api/cron/tick` every ~5 minutes with `Authorization: Bearer $CRON_SECRET` (any cron service), or run `npm run tick` from system cron. It expires waitlist offers and syncs ratings that are due (respecting backoff and rate limits).
+Call `/api/cron/tick` every ~5 minutes with `Authorization: Bearer $CRON_SECRET` (any cron service), or run `npm run tick` from system cron. It expires waitlist offers, syncs ratings that are due (respecting backoff and rate limits) and runs the retention cleanup.
+
+## Privacy (GDPR)
+
+- **Privacy policy** at `/privatliv`. Text in [brackets] (legal entity, CVR, contact, processors, date) must be filled in by the club before launch.
+- **Data export:** Profil → "Download mine data" (`/api/mig/eksport`) returns the member's own data as JSON: profile, DUPR link, rating history, bookings and attendance, achievements, notifications, sync log, login sessions. No secrets; rate limited.
+- **Account deletion:** see Authentication & roles.
+- **Data retention** (`src/lib/retention.ts`, shown in the policy, enforced by the tick): DUPR sync log 180 days; read notifications 180 days, all notifications 365 days; admin audit log 2 years; webhook ids 30 days; expired sessions, verification tokens, link requests and rate-limit counters as soon as they expire.
+- Before launch: sign data processing agreements with the hosting and email providers.
 
 ## Deployment
 
@@ -115,7 +126,7 @@ Serverless hosts work for the app, but profile photos need persistent storage: e
 
 ```bash
 createdb pbk_test            # or set TEST_DATABASE_URL
-npm test                     # 62 integration tests against Postgres (schema rebuilt per run)
+npm test                     # 69 integration tests against Postgres (schema rebuilt per run)
 npm run lint && npm run typecheck && npm run build
 # e2e: start the app with the mock provider + seed, then
 CHROME_PATH=/path/to/chrome npm run e2e   # desktop + mobile flows, screenshots in e2e/screenshots
@@ -125,7 +136,7 @@ Coverage of the acceptance criteria:
 
 | # | Criterion | Where |
 | --- | --- | --- |
-| 1 | Register, log in, edit profile, upload photo | `tests/auth-profile.test.ts`, e2e |
+| 1 | Register (with email verification), log in, edit profile, upload photo | `tests/auth-profile.test.ts`, e2e |
 | 2 | Member can't set own rating | `tests/dupr.test.ts` ("members cannot set their own rating"), `tests/auth-profile.test.ts`, e2e (no rating input) |
 | 3 | Eligible member can book | `tests/booking.test.ts`, e2e |
 | 4 | Out-of-range member can't book, even via the API | `tests/booking.test.ts` (calls services directly) |
@@ -137,6 +148,7 @@ Coverage of the acceptance criteria:
 | 10 | Non-admins blocked from admin functions | `tests/admin.test.ts` (every admin service), e2e (/admin redirect) |
 | 11 | Admin manages sessions and views booking lists | `tests/admin.test.ts`, e2e |
 | 12 | Core flows on mobile and desktop | `e2e/smoke.mjs` (390 px and 1366 px) |
+| – | Admin roles, data export, retention | `tests/admin.test.ts`, `tests/privacy.test.ts`, e2e |
 
 ## Project layout
 

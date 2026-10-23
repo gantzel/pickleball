@@ -23,7 +23,10 @@ function danish(err: AuthError): string {
     case "INVALID_EMAIL":
       return "Skriv en gyldig e-mailadresse.";
     case "INVALID_TOKEN":
+    case "TOKEN_EXPIRED":
       return "Linket er udløbet eller ugyldigt. Bed om et nyt.";
+    case "EMAIL_NOT_VERIFIED":
+      return "Du skal bekræfte din e-mail, før du kan logge ind. Vi har sendt et nyt link.";
     default:
       return "Noget gik galt. Prøv igen.";
   }
@@ -52,7 +55,7 @@ export function LoginForm() {
         const f = new FormData(e.currentTarget);
         setPending(true);
         setError(null);
-        const { error } = await authClient.signIn.email({ email: String(f.get("email")), password: String(f.get("password")) });
+        const { error } = await authClient.signIn.email({ email: String(f.get("email")), password: String(f.get("password")), callbackURL: "/bekraeftet" });
         setPending(false);
         if (error) return setError(danish(error));
         router.replace(safeNext(sp.get("next")));
@@ -82,9 +85,10 @@ export function LoginForm() {
 }
 
 export function SignUpForm() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  if (sentTo) return <CheckEmail email={sentTo} />;
   return (
     <form
       className="space-y-4"
@@ -95,11 +99,11 @@ export function SignUpForm() {
         if (password !== String(f.get("password2"))) return setError("Adgangskoderne er ikke ens.");
         setPending(true);
         setError(null);
-        const { error } = await authClient.signUp.email({ name: String(f.get("name")).trim(), email: String(f.get("email")), password });
+        const email = String(f.get("email")).trim();
+        const { error } = await authClient.signUp.email({ name: String(f.get("name")).trim(), email, password, callbackURL: "/bekraeftet" });
         setPending(false);
         if (error) return setError(danish(error));
-        router.replace("/profil#dupr");
-        router.refresh();
+        setSentTo(email);
       }}
     >
       <div>
@@ -121,6 +125,9 @@ export function SignUpForm() {
       </div>
       <ErrorText text={error} />
       <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Opretter…" : "Opret konto"}</button>
+      <p className="text-sm text-muted">
+        Læs hvordan vi behandler dine data i <Link href="/privatliv" className="link">privatlivspolitikken</Link>.
+      </p>
       <p className="text-center text-sm">
         Har du allerede en konto? <Link href="/login" className="link">Log ind</Link>
       </p>
@@ -193,6 +200,49 @@ export function ResetForm() {
       </div>
       <ErrorText text={error} />
       <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Gemmer…" : "Gem ny adgangskode"}</button>
+    </form>
+  );
+}
+
+/** Shown after sign-up: the account works once the emailed link is clicked. */
+export function CheckEmail({ email }: { email: string }) {
+  return (
+    <div className="space-y-4">
+      <div role="status" className="rounded-[12px] bg-court-soft p-4">
+        <p className="font-semibold text-court">Tjek din e-mail</p>
+        <p className="mt-1 text-sm">
+          Vi har sendt et link til <strong>{email}</strong>. Klik på det for at aktivere din konto. Linket virker i 24 timer.
+        </p>
+      </div>
+      <p className="text-sm text-muted">Kan du ikke finde mailen? Tjek spam, eller send et nyt link.</p>
+      <ResendVerification defaultEmail={email} />
+    </div>
+  );
+}
+
+export function ResendVerification({ defaultEmail = "" }: { defaultEmail?: string }) {
+  const [state, setState] = useState<{ ok: boolean; text: string } | null>(null);
+  const [pending, setPending] = useState(false);
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const email = String(new FormData(e.currentTarget).get("email"));
+        setPending(true);
+        const { error } = await authClient.sendVerificationEmail({ email, callbackURL: "/bekraeftet" });
+        setPending(false);
+        if (error?.status === 429) return setState({ ok: false, text: danish(error) });
+        // Same answer whether or not the account exists.
+        setState({ ok: true, text: "Hvis der findes en ubekræftet konto med den e-mail, har vi sendt et nyt link." });
+      }}
+    >
+      <div>
+        <label htmlFor="resend-email" className="label">E-mail</label>
+        <input id="resend-email" name="email" type="email" required defaultValue={defaultEmail} autoComplete="email" className="field" />
+      </div>
+      <button className="btn btn-secondary w-full" disabled={pending}>{pending ? "Sender…" : "Send nyt link"}</button>
+      <p role="status" className={`min-h-[1.25rem] text-sm font-medium ${state?.ok ? "text-court" : "text-alert"}`}>{state?.text ?? ""}</p>
     </form>
   );
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { deleteLevel, saveLevel, updateSettings } from "@/server/admin";
+import { deleteLevel, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -100,4 +100,11 @@ export async function retrySyncAction(linkId: string): Promise<ActionResult> {
   refreshAdmin();
   if (res.ok) return { ok: true, message: `Synkronisering: ${res.data}` };
   return res as ActionResult;
+}
+
+export async function setRoleAction(userId: string, role: "MEMBER" | "ADMIN"): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(() => setMemberRole(actor, userId, role), role === "ADMIN" ? "Medlemmet er nu administrator." : "Admin-adgangen er fjernet.");
+  refreshAdmin();
+  return res;
 }

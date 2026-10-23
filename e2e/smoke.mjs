@@ -60,9 +60,26 @@ async function memberFlow(name, vp) {
   await page.type("#password", "korrekt-hest-batteri");
   await page.type("#password2", "korrekt-hest-batteri");
   await clickText(page, "button", "Opret konto");
-  await page.waitForFunction(() => location.pathname.startsWith("/profil") || document.body.innerText.includes("For mange forsøg"), { timeout: 30000 });
-  if (!page.url().includes("/profil")) throw new Error("Sign-up was rate limited (10/hour per IP). Wait, or clear the rate_limit table in a test database.");
-  await page.waitForNetworkIdle();
+  await page.waitForFunction(() => document.body.innerText.includes("Tjek din e-mail") || document.body.innerText.includes("For mange forsøg"), { timeout: 30000 });
+  if (!(await text(page)).includes("Tjek din e-mail")) throw new Error("Sign-up was rate limited (10/hour per IP). Wait, or clear the rate_limit table in a test database.");
+
+  // Unverified accounts can't log in.
+  await go(page, "/login");
+  await page.type("#email", email);
+  await page.type("#password", "korrekt-hest-batteri");
+  await clickText(page, "button", "Log ind");
+  await waitForText(page, "Du skal bekræfte din e-mail");
+
+  // Open the verification link from the dev mailbox → signed in, welcomed on the profile.
+  await go(page, "/dev/mail");
+  const verifyUrl = await page.evaluate((to) => {
+    const item = [...document.querySelectorAll("li")].find((li) => li.innerText.includes(to) && li.innerText.includes("Bekræft"));
+    return item?.querySelector("a")?.getAttribute("href");
+  }, email);
+  assert.ok(verifyUrl, "verification email should be in the dev mailbox");
+  await page.goto(verifyUrl, { waitUntil: "networkidle0" });
+  assert.match(page.url(), /\/profil\?velkommen=1/);
+  await waitForText(page, "Din e-mail er bekræftet");
 
   // No way to type a rating anywhere on the profile.
   assert.equal(await page.$("input[name*=rating i]"), null, "profile must not expose a rating input");
@@ -118,6 +135,16 @@ async function memberFlow(name, vp) {
   // Progress page renders the honest-history note.
   await go(page, "/udvikling");
   await waitForText(page, "Ældre historik er ikke tilgængelig");
+
+  // "Download mine data" returns the member's own data.
+  const exported = await page.evaluate(async () => {
+    const r = await fetch("/api/mig/eksport");
+    return { status: r.status, body: await r.json() };
+  });
+  assert.equal(exported.status, 200);
+  assert.equal(exported.body.profile.email, email);
+  const anon = await fetch(`${BASE}/api/mig/eksport`);
+  assert.equal(anon.status, 401, "export must require login");
 
   // Member can't reach admin.
   await go(page, "/admin");

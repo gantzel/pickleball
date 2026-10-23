@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "@/components/app-shell";
 import { SyncButton } from "@/components/sync-button";
 import { Chip } from "@/components/status-chip";
@@ -29,7 +30,7 @@ const RESULT_LABEL: Record<string, string> = {
   UNAVAILABLE: "Ikke aktiv",
 };
 
-export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ dupr?: string; dupr_error?: string }> }) {
+export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ dupr?: string; dupr_error?: string; velkommen?: string }> }) {
   const sp = await searchParams;
   const user = await requireUser();
   const actor = toActor(user);
@@ -41,6 +42,11 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       <PageHeader title="Profil" intro={user.email} />
+      {sp.velkommen && (
+        <p role="status" className="rounded-[12px] bg-court-soft p-4 font-medium text-court">
+          Din e-mail er bekræftet, og din konto er klar. Næste skridt er at koble din DUPR-profil til herunder.
+        </p>
+      )}
 
       <section aria-labelledby="me-h" className="panel space-y-6 p-5 sm:p-6">
         <h2 id="me-h" className="text-xl font-bold">Dig</h2>
@@ -119,6 +125,14 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
             </form>
           </>
         )}
+      </section>
+
+      <section aria-labelledby="data-h" className="panel space-y-3 p-5 sm:p-6">
+        <h2 id="data-h" className="text-xl font-bold">Dine data</h2>
+        <p className="max-w-[62ch] text-sm">
+          Hent en kopi af alt, vi har gemt om dig: profil, DUPR-forbindelse, ratinghistorik, bookinger, fremmøde, milepæle og notifikationer. Læs mere i <Link href="/privatliv" className="link">privatlivspolitikken</Link>.
+        </p>
+        <a href="/api/mig/eksport" className="btn btn-secondary" download>Download mine data</a>
       </section>
 
       <section aria-labelledby="del-h" className="panel space-y-3 border-alert/30 p-5 sm:p-6">

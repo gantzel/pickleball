@@ -28,6 +28,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,
+    // Members must confirm they own the email address before they can log in.
+    requireEmailVerification: true,
     maxPasswordLength: 128,
     autoSignIn: true,
     revokeSessionsOnPasswordReset: true,
@@ -37,6 +39,19 @@ export const auth = betterAuth({
         to: user.email,
         subject: "Nulstil din adgangskode — Pickleball København",
         text: `Hej ${user.name}\n\nKlik på linket for at vælge en ny adgangskode. Linket virker i 1 time:\n${url}\n\nHar du ikke bedt om det, kan du se bort fra denne mail.`,
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    sendOnSignIn: true, // re-sends the link if an unverified member tries to log in
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60 * 24,
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendMail({
+        to: user.email,
+        subject: "Bekræft din e-mail — Pickleball København",
+        text: `Hej ${user.name}\n\nKlik på linket for at bekræfte din e-mail og aktivere din konto. Linket virker i 24 timer:\n${url}\n\nHar du ikke oprettet en konto, kan du se bort fra denne mail.`,
       });
     },
   },
@@ -54,6 +69,7 @@ export const auth = betterAuth({
       "/sign-up/email": { window: 3600, max: 10 },
       "/request-password-reset": { window: 900, max: 3 },
       "/reset-password": { window: 900, max: 5 },
+      "/send-verification-email": { window: 900, max: 3 },
     },
   },
   advanced: {

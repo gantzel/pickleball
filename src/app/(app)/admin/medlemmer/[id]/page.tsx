@@ -6,13 +6,14 @@ import { isDomainError } from "@/lib/errors";
 import { formatDateTime, formatRating } from "@/lib/format";
 import { getMemberAdmin } from "@/server/admin";
 import { requireAdminUser, toActor } from "@/server/current-user";
-import { RetryButton } from "../../controls";
+import { RetryButton, RoleControl } from "../../controls";
 
 export default async function Member({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const me = await requireAdminUser();
   let m;
   try {
-    m = await getMemberAdmin(toActor(await requireAdminUser()), id);
+    m = await getMemberAdmin(toActor(me), id);
   } catch (e) {
     if (isDomainError(e) && e.code === "NOT_FOUND") notFound();
     throw e;
@@ -49,6 +50,13 @@ export default async function Member({ params }: { params: Promise<{ id: string 
         ) : (
           <p className="mt-2 text-sm text-muted">Medlemmet har ikke koblet en DUPR-profil til.</p>
         )}
+      </section>
+      <section className="panel p-5">
+        <h2 className="text-xl font-bold">Rolle</h2>
+        <p className="mb-3 mt-1 text-sm text-muted">
+          {m.user.role === "ADMIN" ? "Administrator: kan se alle medlemmer, ratings og deltagerlister og ændre træninger og regler." : "Medlem: kan kun se og ændre sine egne data."}
+        </p>
+        <RoleControl userId={m.user.id} role={m.user.role} isSelf={m.user.id === me.id} />
       </section>
       <section className="panel p-5">
         <h2 className="text-xl font-bold">Synkroniseringslog</h2>

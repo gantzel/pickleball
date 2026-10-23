@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { env } from "@/lib/env";
 import { processExpiredOffers } from "@/server/bookings";
+import { runRetention } from "@/server/privacy";
 import { runScheduledSync } from "@/server/dupr/sync";
 import { safeEqual } from "@/server/http";
 
@@ -18,7 +19,8 @@ async function handle(req: Request) {
   if (!secret || !safeEqual(given, secret)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const offers = await processExpiredOffers();
   const sync = await runScheduledSync();
-  return NextResponse.json({ ok: true, expiredOfferSessions: offers, sync });
+  const retention = await runRetention();
+  return NextResponse.json({ ok: true, expiredOfferSessions: offers, sync, retention });
 }
 
 export const GET = handle;

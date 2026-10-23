@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { bookingAdminAction, deleteLevelAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { setRoleAction, bookingAdminAction, deleteLevelAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import type { ActionResult } from "@/lib/errors";
@@ -285,5 +285,29 @@ export function RetryButton({ linkId }: { linkId: string }) {
       </button>
       {state && <span role="status" className={`text-xs ${state.ok ? "text-court" : "text-alert"}`}>{state.message}</span>}
     </span>
+  );
+}
+
+export function RoleControl({ userId, role, isSelf }: { userId: string; role: "MEMBER" | "ADMIN"; isSelf: boolean }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  if (isSelf) return <p className="text-sm text-muted">Du kan ikke ændre din egen rolle.</p>;
+  const next = role === "ADMIN" ? "MEMBER" : "ADMIN";
+  return (
+    <div className="space-y-2">
+      {confirm ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm">{next === "ADMIN" ? "Giv adgang til alle medlemsdata og admin-funktioner?" : "Fjern adgangen til admin-området?"}</span>
+          <button className={`btn ${next === "ADMIN" ? "btn-primary" : "btn-danger"}`} disabled={pending} onClick={() => start(async () => { setState(await setRoleAction(userId, next)); setConfirm(false); })}>
+            {next === "ADMIN" ? "Ja, gør til admin" : "Ja, fjern admin"}
+          </button>
+          <button className="btn btn-ghost" onClick={() => setConfirm(false)}>Fortryd</button>
+        </div>
+      ) : (
+        <button className="btn btn-secondary" onClick={() => setConfirm(true)}>{role === "ADMIN" ? "Fjern admin-adgang" : "Gør til administrator"}</button>
+      )}
+      <FormMessage state={state} />
+    </div>
   );
 }

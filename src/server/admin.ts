@@ -8,6 +8,8 @@ import { requireAdmin } from "./actor";
 import { audit } from "./audit";
 import { isProviderActive } from "./dupr/provider";
 import { computeRatingState } from "./eligibility";
+import { Effects } from "./effects";
+import { notify } from "./notify";
 import { getSettings } from "./settings";
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
@@ -156,4 +158,34 @@ export async function listAudit(actor: Actor, limit = 200) {
     .leftJoin(user, eq(user.id, auditEvent.actorId))
     .orderBy(desc(auditEvent.createdAt))
     .limit(limit);
+}
+
+// ─── Roles ───────────────────────────────────────────────────────────────────
+
+/**
+ * Grants or removes the admin role. Admins can't change their own role (so
+ * nobody locks themselves out by accident) and the club always keeps at
+ * least one admin. Admin rows are locked so two simultaneous demotions can't
+ * both succeed.
+ */
+export async function setMemberRole(actor: Actor, userId: string, role: "MEMBER" | "ADMIN") {
+  requireAdmin(actor);
+  if (role !== "MEMBER" && role !== "ADMIN") throw new DomainError("VALIDATION", "Ugyldig rolle.");
+  if (userId === actor.id) throw new DomainError("CONFLICT", "Du kan ikke ændre din egen rolle. Bed en anden administrator om det.");
+  const effects = new Effects();
+  await db.transaction(async (tx) => {
+    const admins = await tx.select({ id: user.id }).from(user).where(and(eq(user.role, "ADMIN"), isNull(user.deletedAt))).for("update");
+    const [target] = await tx.select().from(user).where(and(eq(user.id, userId), isNull(user.deletedAt))).for("update");
+    if (!target) throw new DomainError("NOT_FOUND", "Medlemmet findes ikke.");
+    if (target.role === role) return;
+    if (role === "MEMBER" && admins.filter((a) => a.id !== userId).length === 0) {
+      throw new DomainError("CONFLICT", "Klubben skal have mindst én administrator.");
+    }
+    await tx.update(user).set({ role }).where(eq(user.id, userId));
+    await audit(tx, { actorId: actor.id, action: role === "ADMIN" ? "role.grant_admin" : "role.revoke_admin", targetType: "user", targetId: userId, metadata: { via: "admin_ui" } });
+    await notify(tx, effects, userId, role === "ADMIN"
+      ? { type: "ROLE_ADMIN_GRANTED", title: "Du er nu administrator", body: "Du har fået adgang til admin-området for Pickleball København.", link: "/admin" }
+      : { type: "ROLE_ADMIN_REVOKED", title: "Din admin-adgang er fjernet", body: "Du har ikke længere adgang til admin-området." });
+  });
+  await effects.flush();
 }

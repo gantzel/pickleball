@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Optimistic redirect for logged-out visitors. This is a UX convenience
  * only — every page and server action re-validates the session server-side.
  */
-const PUBLIC = ["/login", "/opret", "/glemt-adgangskode", "/nulstil-adgangskode", "/privatliv"];
+const PUBLIC = ["/login", "/opret", "/glemt-adgangskode", "/nulstil-adgangskode", "/privatliv", "/bekraeftet", "/dev/mail"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
