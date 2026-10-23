@@ -6,7 +6,10 @@ import { Pool } from "pg";
 
 // Migrations prefer a direct (unpooled) connection when the host provides one.
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is not set");
+if (!url) {
+  console.error("\nDATABASE_URL is not set. Connect a database to this project (e.g. Vercel → Storage → Neon) and redeploy.\n");
+  process.exit(1);
+}
 const pool = new Pool({ connectionString: url, max: 1 });
 const db = drizzle(pool);
 
