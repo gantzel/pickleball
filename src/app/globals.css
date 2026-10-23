@@ -1,26 +1,163 @@
 @import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+@import "@fontsource-variable/figtree";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Pickleball København design tokens.
+ * Court green + optic-ball yellow on a cool court-paper ground.
+ * Status colours are semantic: green = bookable, amber = waitlist,
+ * outer-court blue = locked by rating, brick = verification problem.
+ */
+@theme {
+  --color-paper: #f2f5f3;
+  --color-surface: #ffffff;
+  --color-court: #1f5c4a;
+  --color-court-deep: #15433a;
+  --color-court-soft: #e3eee9;
+  --color-ball: #d7e54b;
+  --color-ball-soft: #f3f8cf;
+  --color-ink: #13221c;
+  --color-muted: #52625b;
+  --color-line: #d3ddd8;
+  --color-wait: #8f560b;
+  --color-wait-soft: #fbefdc;
+  --color-lock: #42607e;
+  --color-lock-soft: #e6edf4;
+  --color-alert: #9b352d;
+  --color-alert-soft: #f8e6e3;
+
+  --font-display: "Bricolage Grotesque Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-chip: 999px;
+  --radius-panel: 14px;
+  --radius-control: 10px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.55;
+    font-feature-settings: "ss01";
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    font-variation-settings: "wdth" 92;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-court);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  ::selection {
+    background: var(--color-ball);
+    color: var(--color-ink);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  .num {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+  }
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0 1.1rem;
+    border-radius: var(--radius-control);
+    font-weight: 600;
+    transition: background-color 120ms, border-color 120ms;
+    white-space: nowrap;
+  }
+  .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .btn-primary {
+    background: var(--color-court);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-court-deep);
+  }
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-line);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    border-color: var(--color-court);
+  }
+  .btn-ghost {
+    color: var(--color-court);
+    padding: 0 0.6rem;
+  }
+  .btn-ghost:hover {
+    background: var(--color-court-soft);
+  }
+  .btn-danger {
+    background: var(--color-alert);
+    color: #fff;
+  }
+  .field {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    color: var(--color-ink);
+  }
+  .field:focus-visible {
+    outline: 3px solid var(--color-court);
+    outline-offset: 0;
+    border-color: var(--color-court);
+  }
+  .label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.925rem;
+    margin-bottom: 0.3rem;
+  }
+  .hint {
+    font-size: 0.85rem;
+    color: var(--color-muted);
+    margin-top: 0.25rem;
+  }
+  .link {
+    color: var(--color-court);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+  .link:hover {
+    text-decoration-thickness: 2px;
+  }
 }

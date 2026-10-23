@@ -1,36 +1,159 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pickleball København — træningsplatform
 
-## Getting Started
+Member platform where Pickleball København members book training sessions that match their verified DUPR rating. Member-facing UI is Danish; code and docs are English.
 
-First, run the development server:
+> **DUPR status:** the official DUPR integration is **not active yet** — it needs DUPR partner credentials. The app ships with a provider adapter, a development/demo-only mock provider, and a documented stub for the live provider. See [docs/DUPR_INTEGRATION.md](docs/DUPR_INTEGRATION.md).
+
+## Stack
+
+| Concern | Choice | Why |
+| --- | --- | --- |
+| App | Next.js 15 (App Router, server actions), React 19, TypeScript | One deployable unit; server-side rendering keeps rules on the server |
+| Database | PostgreSQL + Drizzle ORM (pure JS, SQL migrations) | Row locks for safe booking; no native engine to ship |
+| Auth | Better Auth (email/password, DB sessions, password reset, DB-backed rate limiting) | Reputable, self-hosted, no vendor lock-in |
+| Validation | Zod on every server input | |
+| Images | sharp (re-encodes uploads to WebP) | Strips metadata and payloads |
+| Styling | Tailwind CSS v4, self-hosted fonts (Bricolage Grotesque, Figtree) | No third-party font requests (GDPR) |
+| Tests | Vitest integration tests on real Postgres; Puppeteer e2e smoke test | |
+
+## Quick start (local development)
+
+Requires Node 20+ and PostgreSQL 14+.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # then edit: DATABASE_URL, BETTER_AUTH_SECRET
+# for local development with fake ratings set: DUPR_PROVIDER="mock" and DUPR_WEBHOOK_SECRET="any-dev-secret"
+npm run db:migrate            # apply SQL migrations
+npm run db:seed               # optional demo data (refuses to run in production)
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo logins after seeding (password `demo-pickleball-2026`): `admin@demo.pbk.local`, `anna@demo.pbk.local` (3.412), `mads@demo.pbk.local` (2.874), `sofie@demo.pbk.local` (3.968).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To simulate DUPR locally, open **/dev/mock-dupr**: change a test player's rating or make DUPR fail (server error, rate limit, revoked, no rating), then "Send rating-webhook". This page and its actions return 404 in production unless `DEMO_MODE=true`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Scripts
 
-## Learn More
+| Command | Does |
+| --- | --- |
+| `npm run dev` / `build` / `start` | Next.js |
+| `npm run db:generate` | Generate a new SQL migration after editing `src/db/schema.ts` |
+| `npm run db:migrate` | Apply migrations (also creates the settings row) |
+| `npm run db:seed` | Demo levels, mock players, users and sessions (`is_demo = true`) |
+| `npm run admin:grant -- email [--revoke]` | Grant/revoke admin. The only way to create the first admin |
+| `npm run tick` | Run background jobs once (offer expiry + due DUPR syncs) |
+| `npm run lint` / `typecheck` / `test` / `e2e` | Quality checks |
 
-To learn more about Next.js, take a look at the following resources:
+## Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [.env.example](.env.example) (placeholders only). Key ones:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `DATABASE_URL`, `BETTER_AUTH_SECRET` (≥ 32 chars), `APP_URL` — required.
+- `DUPR_PROVIDER` — `none` (production default until DUPR access exists), `mock` (dev/demo), `dupr` (live, once implemented).
+- `DEMO_MODE=true` — allows the mock provider in a production build and shows a permanent "demo, not real DUPR data" banner. Never set it on the real member site.
+- `CRON_SECRET` — bearer token for `/api/cron/tick`.
+- `UPLOAD_DIR` — persistent disk for profile photos.
+- `SMTP_URL`, `MAIL_FROM` — email delivery; without SMTP, emails are logged (dev) or a warning is logged (prod). In-app notifications always work.
 
-## Deploy on Vercel
+## Authentication & roles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Email + password (min. 10 characters), DB sessions (30 days, sliding), password reset by emailed link (1 hour, revokes other sessions). Sign-in, sign-up and reset endpoints are rate limited in Postgres.
+- Roles: `MEMBER` and `ADMIN`. The `role` column is not exposed to the auth library, so it can't be set through sign-up or profile updates. Grant admins with `npm run admin:grant -- email` (audited).
+- Every page, server action and API route resolves the user server-side; services take an `actor` and enforce ownership/role themselves. The middleware redirect is only a convenience.
+- Account deletion (Profil → Slet konto, password + "SLET" confirmation): removes name, email, photo, credentials, sessions, DUPR link, rating snapshots, notifications and achievements immediately; cancels upcoming bookings (places go to the waitlist); keeps past bookings anonymised for attendance statistics.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Rules (policies)
+
+All admin-configurable under **Admin → Regler**; changes are audited.
+
+**Eligibility policy**
+- Only ratings from the *active* provider count. Mock ratings never count in production.
+- A rating is *verified* if the last successful sync is within `staleAfterDays` (default 14). A failed sync inside that window keeps the rating usable, with a warning. After it, the rating is *stale* → "Rating skal verificeres" → cannot book.
+- Not linked, no DUPR rating yet, revoked access, or integration unavailable → cannot book.
+- Doubles rating by default (switchable to singles).
+- Session limits are inclusive (`min ≤ rating ≤ max`). Training levels are half-open `[min, max)` so they never overlap.
+- Eligibility is computed from the current verified rating on every read and every booking attempt, so a rating change takes effect immediately.
+
+**Booking & capacity**
+- Every booking mutation locks the session row (`SELECT … FOR UPDATE`) in a transaction; held places = confirmed + unexpired offers. A unique `(session_id, user_id)` index makes duplicate bookings impossible.
+- Booking windows: optional open time; closes at the optional close time or session start.
+- Members can cancel until `cancellationCutoffHours` (default 2) before start.
+
+**Waitlist (fair rule)**
+- Only eligible members can join, and only when the session is full.
+- When a place frees up it is offered to the **earliest-joined waitlisted member who is currently eligible**. Ineligible members are skipped but keep their position.
+- The place is held for `offerWindowHours` (default 12) or until booking closes, whichever is sooner. The member is notified (in-app + email). Unaccepted offers expire (`/api/cron/tick`, and lazily on any booking action for that session) and move to the next in line.
+
+**Rating changes**
+- Increase: new sessions unlock immediately; reaching a new level awards a milestone and sends a notification that eligibility ≠ a guaranteed place.
+- Decrease below a booked session's range — `ratingDropPolicy`:
+  - `KEEP_AND_FLAG` (default): booking kept, flagged for admins, member and admins notified. Flag clears if the rating recovers.
+  - `RELEASE_AND_NOTIFY`: booking released to the waitlist, member notified with the reason.
+  - Bookings are never cancelled silently. A pending waitlist offer that becomes ineligible returns to the queue.
+- Admins editing a session's rating range flag (never cancel) bookings that fall outside.
+
+**Progress & achievements** use only provider-synced ratings and admin-recorded attendance. Rating history starts at link time unless the provider supplies history; nothing is fabricated, and the UI says so.
+
+## Background jobs
+
+Call `/api/cron/tick` every ~5 minutes with `Authorization: Bearer $CRON_SECRET` (any cron service), or run `npm run tick` from system cron. It expires waitlist offers and syncs ratings that are due (respecting backoff and rate limits).
+
+## Deployment
+
+The app is a standard Next.js server with a Postgres database.
+
+1. Provision PostgreSQL and a persistent volume for `UPLOAD_DIR`.
+2. Set environment variables (production: `DUPR_PROVIDER=none` until the live integration exists, `DEMO_MODE=false`, real `APP_URL` over HTTPS, `SMTP_URL`).
+3. `npm ci && npm run db:migrate && npm run build && npm start` (port 3000, behind TLS).
+4. `npm run admin:grant -- you@example.com` after registering your account.
+5. Schedule the cron tick.
+
+Serverless hosts work for the app, but profile photos need persistent storage: either a host with a disk/volume, or replace `src/server/uploads.ts` with an object-storage implementation (the module is the only place files are read/written). Run migrations as a release step.
+
+## Testing
+
+```bash
+createdb pbk_test            # or set TEST_DATABASE_URL
+npm test                     # 62 integration tests against Postgres (schema rebuilt per run)
+npm run lint && npm run typecheck && npm run build
+# e2e: start the app with the mock provider + seed, then
+CHROME_PATH=/path/to/chrome npm run e2e   # desktop + mobile flows, screenshots in e2e/screenshots
+```
+
+Coverage of the acceptance criteria:
+
+| # | Criterion | Where |
+| --- | --- | --- |
+| 1 | Register, log in, edit profile, upload photo | `tests/auth-profile.test.ts`, e2e |
+| 2 | Member can't set own rating | `tests/dupr.test.ts` ("members cannot set their own rating"), `tests/auth-profile.test.ts`, e2e (no rating input) |
+| 3 | Eligible member can book | `tests/booking.test.ts`, e2e |
+| 4 | Out-of-range member can't book, even via the API | `tests/booking.test.ts` (calls services directly) |
+| 5 | No overbooking under concurrency | `tests/booking.test.ts` (20 concurrent members, 4 places) |
+| 6 | No duplicate bookings | `tests/booking.test.ts` (5 concurrent double-clicks) |
+| 7 | Waitlist + freed place handling | `tests/booking.test.ts` (offer, accept, skip ineligible, expiry) |
+| 8 | Rating up/down updates eligibility | `tests/dupr.test.ts` |
+| 9 | Stale / missing / failed / revoked / rate-limited sync | `tests/dupr.test.ts`, `tests/eligibility.test.ts` |
+| 10 | Non-admins blocked from admin functions | `tests/admin.test.ts` (every admin service), e2e (/admin redirect) |
+| 11 | Admin manages sessions and views booking lists | `tests/admin.test.ts`, e2e |
+| 12 | Core flows on mobile and desktop | `e2e/smoke.mjs` (390 px and 1366 px) |
+
+## Project layout
+
+```
+src/db/schema.ts          data model (single source of truth) → drizzle/*.sql migrations
+src/server/               domain services (all rules live here)
+  eligibility.ts          pure rating/availability/level rules
+  bookings.ts             transactional booking, waitlist offers, cancellations
+  rating-effects.ts       consequences of rating changes (flags, releases, milestones)
+  dupr/                   provider boundary: provider.ts, mock.ts, partner.ts, sync.ts, link.ts
+  sessions.ts admin.ts members.ts progress.ts achievements.ts uploads.ts
+src/app/                  routes (Danish slugs), server actions, API routes
+src/components/           UI components (rating court, session rows, charts…)
+scripts/                  migrate, seed-demo, grant-admin, tick
+tests/  e2e/  docs/
+```
+
+## Security notes
+
+Server-side validation (Zod) everywhere; parameterised SQL via Drizzle; React escaping (no `dangerouslySetInnerHTML`); server actions are origin-checked by Next.js and the DUPR link route checks `Origin`; webhook signatures are verified and payload ratings ignored; uploads are magic-byte checked, size-limited and re-encoded, served only to logged-in members with `nosniff` and a restrictive CSP; security headers (frame-ancestors none, HSTS, referrer policy); secrets only in env; audit log for admin and system actions; sync log without secrets.
