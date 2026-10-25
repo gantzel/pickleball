@@ -28,7 +28,7 @@ Any other S3-compatible store works the same way (AWS S3: leave `S3_ENDPOINT` em
 
 1. Create a Brevo account and **authenticate your domain** (Brevo shows DNS records to add at your domain host) so mail isn't flagged as spam.
 2. Under SMTP & API, create an SMTP key. Brevo shows an SMTP login (an email-like address).
-3. Variables: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<the SMTP login>`, `SMTP_PASS=<the SMTP key>` (mark it Secret), and `MAIL_FROM="Pickleball København <admin@yourdomain.dk>"` using a sender added and verified in Brevo on the authenticated domain. (A single `SMTP_URL` also works; URL-encode `@` in the login as `%40`.)
+3. Variables: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<the SMTP login>`, `SMTP_PASS=<the SMTP key>` (mark it Secret), and `MAIL_FROM="Pickleball København <admin@yourdomain.dk>"` using a sender added and verified in Brevo on the authenticated domain. The sender address doesn't need a mailbox; set `MAIL_REPLY_TO` to a mailbox you read so members' replies arrive. (A single `SMTP_URL` also works; URL-encode `@` in the login as `%40`.)
 
 ## 4. App — Vercel
 
@@ -65,11 +65,7 @@ Alternative without GitHub: a free external scheduler (e.g. cron-job.org) callin
 
 ## 7. First admin
 
-Register on the live site and confirm your email, then run once from your computer with the production database URL:
-
-```bash
-DATABASE_URL="<direct Neon URL>" npm run admin:grant -- you@example.com
-```
+Set `INITIAL_ADMIN_EMAIL=you@example.com` in Vercel, then register on the live site with that address and confirm it. The account becomes admin automatically — only while the club has no admin, so the setting is harmless afterwards (you can remove it). Alternatively run `DATABASE_URL="<direct Neon URL>" npm run admin:grant -- you@example.com` from your computer.
 
 After that, admins promote others under Admin → Medlemmer.
 

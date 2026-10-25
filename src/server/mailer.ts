@@ -65,7 +65,8 @@ export async function sendMail(msg: Mail) {
     return;
   }
   try {
-    await t.sendMail({ from: env().MAIL_FROM, ...msg });
+    const replyTo = env().MAIL_REPLY_TO;
+    await t.sendMail({ from: env().MAIL_FROM, ...(replyTo ? { replyTo } : {}), ...msg });
   } catch (err) {
     console.error("[mail] failed to send", { to: msg.to, subject: msg.subject, err });
   }

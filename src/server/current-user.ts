@@ -7,16 +7,20 @@ import { db } from "@/db";
 import { user } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import type { Actor } from "./actor";
+import { maybeBootstrapAdmin } from "./bootstrap-admin";
 
 /** Resolves the logged-in member from the session cookie (null if none/deleted). Cached per request. */
 export const getCurrentUser = cache(async () => {
   const s = await auth.api.getSession({ headers: await headers() });
   if (!s) return null;
-  const [u] = await db
-    .select({ id: user.id, name: user.name, email: user.email, role: user.role, avatarKey: user.avatarKey, emailNotifications: user.emailNotifications })
+  const [row] = await db
+    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, avatarKey: user.avatarKey, emailNotifications: user.emailNotifications })
     .from(user)
     .where(and(eq(user.id, s.user.id), isNull(user.deletedAt)));
-  return u ?? null;
+  if (!row) return null;
+  const { emailVerified: _verified, ...u } = row;
+  if (await maybeBootstrapAdmin(row, process.env.INITIAL_ADMIN_EMAIL)) u.role = "ADMIN";
+  return u;
 });
 
 export type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
