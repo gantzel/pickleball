@@ -14,6 +14,13 @@ No part of the app scrapes DUPR, asks for a member's DUPR password, or accepts a
 
 Sources: DUPR club resources (dupr.com/club-resources-new), a community PHP client for the partner API (github.com/Info-Esportes/dupr-partner-api) describing auth, environments and endpoints, Playbypoint and pickleball.com help articles on linking DUPR.
 
+## Club status (25 Oct 2026)
+
+- The club exists on DUPR: **Pickleball Denmark**, Copenhagen, club ID **4826145949** (dashboard.dupr.com/dashboard/browse/clubs/4826145949). Director: Rikke Flygenring Gantzel.
+- A DUPR club gives a member roster, leaderboard, match upload (manual/CSV) and use of DUPR's *existing* integrated software partners. It does **not** by itself issue API credentials to the club's own software.
+- DUPR's club team: **clubs@mydupr.com** (support: support@mydupr.com). This is the route to request partner/API access, quoting the club ID.
+- From a public open-source integration (GitHub, relandpigte/sports-booking PR #51): partner credentials need DUPR's `USER::DETAIL` permission; DUPR provides a per-client-key **consent page URL** ("SSO URL") that opens in a popup and reports the member's DUPR ID back (postMessage); ratings are then fetched server-side by DUPR ID with the client key/secret, and DUPR only returns players who consented. Ask DUPR to confirm the exact flow.
+
 ## What Pickleball København needs to do
 
 1. Contact DUPR (partnerships / club team) and request partner API access for a club training platform. Ask specifically for:
