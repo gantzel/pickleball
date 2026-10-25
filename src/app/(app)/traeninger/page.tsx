@@ -10,11 +10,18 @@ import { listUpcomingForMember } from "@/server/sessions";
 
 export const metadata = { title: "Træninger" };
 
+// Filters look at the member and their children together ("Mine" includes a child's booking).
+const anyone = (v: MemberSessionView, codes: string[]) =>
+  codes.includes(v.availability.code) || v.children.some((c) => codes.includes(c.availability.code));
+const BOOKABLE = ["AVAILABLE", "FULL_WAITLIST", "OFFERED"];
+const MINE = ["BOOKED", "WAITLISTED", "OFFERED"];
+const LOCKED = ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED", "NOT_ON_ROSTER", "DUPR_NEEDED"];
+
 const FILTERS = [
   { key: "alle", label: "Alle", test: () => true },
-  { key: "kan-bookes", label: "Kan bookes", test: (v: MemberSessionView) => ["AVAILABLE", "FULL_WAITLIST", "OFFERED"].includes(v.availability.code) },
-  { key: "mine", label: "Mine", test: (v: MemberSessionView) => ["BOOKED", "WAITLISTED", "OFFERED"].includes(v.availability.code) },
-  { key: "laast", label: "Låst", test: (v: MemberSessionView) => ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED", "NOT_ON_ROSTER", "DUPR_NEEDED"].includes(v.availability.code) },
+  { key: "kan-bookes", label: "Kan bookes", test: (v: MemberSessionView) => anyone(v, BOOKABLE) },
+  { key: "mine", label: "Mine", test: (v: MemberSessionView) => anyone(v, MINE) },
+  { key: "laast", label: "Låst", test: (v: MemberSessionView) => LOCKED.includes(v.availability.code) && !anyone(v, [...BOOKABLE, ...MINE]) },
 ] as const;
 
 const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -40,7 +47,11 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   }
 
   const items: CalendarItem[] = views.map((v) => {
-    const { label, tone } = availabilityLabel(v.availability);
+    // Show a child's booking in the calendar when the member has none of their own.
+    const kid = !MINE.includes(v.availability.code) ? v.children.find((c) => MINE.includes(c.availability.code)) : undefined;
+    const base = availabilityLabel(kid ? kid.availability : v.availability);
+    const label = kid ? `${kid.name}: ${base.label.toLowerCase()}` : base.label;
+    const tone = base.tone;
     return {
       id: v.session.id,
       title: v.session.title,

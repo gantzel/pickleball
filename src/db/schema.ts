@@ -18,6 +18,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -122,6 +123,25 @@ export const user = pgTable("user", {
   calendarToken: text("calendar_token").unique(),
   deletedAt: ts("deleted_at"),
 });
+
+/**
+ * Children are not users: a parent (member) holds the login and books on the
+ * child's behalf. Only the child's name and birth year are stored.
+ */
+export const child = pgTable(
+  "child",
+  {
+    id: id(),
+    parentId: text("parent_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    birthYear: integer("birth_year").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("child_parent_idx").on(t.parentId)],
+);
 
 export const session = pgTable(
   "session",
@@ -328,13 +348,15 @@ export const levelMember = pgTable(
     levelId: text("level_id")
       .notNull()
       .references(() => trainingLevel.id, { onDelete: "cascade" }),
+    /** The member (the parent, when the roster entry is for a child). */
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    childId: text("child_id").references(() => child.id, { onDelete: "cascade" }),
     addedById: text("added_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex("level_member_uq").on(t.levelId, t.userId), index("level_member_user_idx").on(t.userId)],
+  (t) => [unique("level_member_uq").on(t.levelId, t.userId, t.childId).nullsNotDistinct(), index("level_member_user_idx").on(t.userId)],
 );
 
 export const trainingSession = pgTable(
@@ -381,9 +403,12 @@ export const booking = pgTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => trainingSession.id, { onDelete: "cascade" }),
+    /** The member who holds the login (the parent, for a child's booking). */
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    /** Set when the place is for the member's child. */
+    childId: text("child_id").references(() => child.id, { onDelete: "cascade" }),
     status: bookingStatusEnum("status").notNull(),
     waitlistedAt: ts("waitlisted_at"),
     offeredAt: ts("offered_at"),
@@ -402,7 +427,7 @@ export const booking = pgTable(
   (t) => [
     // One row per member per session (re-booking reuses it): duplicate
     // bookings are impossible at the database level.
-    uniqueIndex("booking_session_user_uq").on(t.sessionId, t.userId),
+    unique("booking_session_participant_uq").on(t.sessionId, t.userId, t.childId).nullsNotDistinct(),
     index("booking_session_status_idx").on(t.sessionId, t.status, t.waitlistedAt),
     index("booking_user_status_idx").on(t.userId, t.status),
     index("booking_offer_expiry_idx").on(t.status, t.offerExpiresAt),
@@ -533,4 +558,5 @@ export type TrainingSession = typeof trainingSession.$inferSelect;
 export type TrainingLevel = typeof trainingLevel.$inferSelect;
 export type ProgramKind = (typeof programKindEnum.enumValues)[number];
 export type Booking = typeof booking.$inferSelect;
+export type Child = typeof child.$inferSelect;
 export type AppSettings = typeof appSettings.$inferSelect;

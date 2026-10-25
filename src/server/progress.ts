@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { booking, duprLink, levelMember, ratingSnapshot, trainingLevel, trainingSession, userAchievement } from "@/db/schema";
 import { ruleRangeLabel } from "@/lib/format";
@@ -16,7 +16,7 @@ export async function memberProgress(actor: Actor, now = new Date()) {
   const allProgrammes = await db.select().from(trainingLevel).orderBy(asc(trainingLevel.sortOrder), asc(trainingLevel.name));
   const levels = sortLevels(allProgrammes);
   const rostered = new Set(
-    (await db.select({ levelId: levelMember.levelId }).from(levelMember).where(eq(levelMember.userId, actor.id))).map((r) => r.levelId),
+    (await db.select({ levelId: levelMember.levelId }).from(levelMember).where(and(eq(levelMember.userId, actor.id), isNull(levelMember.childId)))).map((r) => r.levelId),
   );
   // "Dine hold": the programmes the member can book right now (no ladder, no comparison).
   const myProgrammes = allProgrammes.flatMap((l) => {
@@ -41,7 +41,7 @@ export async function memberProgress(actor: Actor, now = new Date()) {
     .select({ s: trainingSession })
     .from(booking)
     .innerJoin(trainingSession, eq(trainingSession.id, booking.sessionId))
-    .where(and(eq(booking.userId, actor.id), eq(booking.status, "CONFIRMED"), eq(booking.attendance, "ATTENDED")))
+    .where(and(eq(booking.userId, actor.id), isNull(booking.childId), eq(booking.status, "CONFIRMED"), eq(booking.attendance, "ATTENDED")))
     .orderBy(desc(trainingSession.startsAt));
 
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400_000);

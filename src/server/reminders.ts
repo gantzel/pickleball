@@ -9,7 +9,7 @@
  */
 import { and, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { booking, trainingSession } from "@/db/schema";
+import { booking, child, trainingSession } from "@/db/schema";
 import { formatDate, formatTime } from "@/lib/format";
 import { Effects } from "./effects";
 import { notify } from "./notify";
@@ -42,21 +42,26 @@ export async function sendDueReminders(now = new Date()) {
       .update(booking)
       .set({ reminderSentAt: now })
       .where(and(inArray(booking.id, due), isNull(booking.reminderSentAt)))
-      .returning({ userId: booking.userId, sessionId: booking.sessionId });
+      .returning({ userId: booking.userId, sessionId: booking.sessionId, childId: booking.childId });
     if (!claimed.length) return 0;
     const sessions = await tx
       .select()
       .from(trainingSession)
       .where(inArray(trainingSession.id, [...new Set(claimed.map((c) => c.sessionId))]));
     const byId = new Map(sessions.map((s) => [s.id, s]));
+    const childIds = claimed.flatMap((c) => (c.childId ? [c.childId] : []));
+    const kids = new Map(
+      (childIds.length ? await tx.select().from(child).where(inArray(child.id, childIds)) : []).map((k) => [k.id, k.name]),
+    );
     for (const c of claimed) {
       const s = byId.get(c.sessionId)!;
       const cutoff = settings.cancellationCutoffHours;
+      const kid = c.childId ? kids.get(c.childId) : null;
       await notify(tx, effects, c.userId, {
         type: "SESSION_REMINDER",
-        title: `Påmindelse: ${s.title} ${formatDate(s.startsAt).toLowerCase()} kl. ${formatTime(s.startsAt)}`,
+        title: `Påmindelse${kid ? ` for ${kid}` : ""}: ${s.title} ${formatDate(s.startsAt).toLowerCase()} kl. ${formatTime(s.startsAt)}`,
         body:
-          `Du er booket på ${s.title} ${formatDate(s.startsAt).toLowerCase()} kl. ${formatTime(s.startsAt)} — ${s.locationName}${s.address ? `, ${s.address}` : ""}.` +
+          `${kid ? `${kid} er` : "Du er"} booket på ${s.title} ${formatDate(s.startsAt).toLowerCase()} kl. ${formatTime(s.startsAt)} — ${s.locationName}${s.address ? `, ${s.address}` : ""}.` +
           (cutoff > 0
             ? ` Kan du ikke komme, så afmeld senest ${cutoff} ${cutoff === 1 ? "time" : "timer"} før start, så pladsen kan gå videre.`
             : " Kan du ikke komme, så afmeld, så pladsen kan gå videre."),

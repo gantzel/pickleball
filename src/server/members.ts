@@ -5,6 +5,7 @@ import { db } from "@/db";
 import {
   account,
   booking,
+  child,
   duprLink,
   notification,
   ratingSnapshot,
@@ -87,6 +88,7 @@ export async function deleteAccount(actor: Actor) {
     await tx.delete(ratingSnapshot).where(eq(ratingSnapshot.userId, actor.id));
     await tx.delete(notification).where(eq(notification.userId, actor.id));
     await tx.delete(userAchievement).where(eq(userAchievement.userId, actor.id));
+    await tx.delete(child).where(eq(child.parentId, actor.id)); // children's data goes with the parent's account
     await tx
       .update(user)
       .set({

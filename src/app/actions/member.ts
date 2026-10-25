@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
 import { acceptOffer, bookSession, cancelBooking, joinWaitlist } from "@/server/bookings";
 import { calendarFeedUrl, rotateCalendarToken } from "@/server/calendar";
+import { addChild, removeChild, updateChild } from "@/server/children";
 import { requireUser, toActor } from "@/server/current-user";
 import { unlink } from "@/server/dupr/link";
 import { manualSync } from "@/server/dupr/sync";
@@ -19,20 +20,18 @@ const refresh = (sessionId?: string) => {
 
 export type BookingAction = "book" | "waitlist" | "accept" | "cancel";
 
-export async function bookingAction(sessionId: string, action: BookingAction): Promise<ActionResult> {
+export async function bookingAction(sessionId: string, action: BookingAction, childId: string | null = null): Promise<ActionResult> {
   const actor = toActor(await requireUser());
-  const messages: Record<BookingAction, string> = {
-    book: "Du er booket.",
-    waitlist: "Du er skrevet på ventelisten.",
-    accept: "Pladsen er din.",
-    cancel: "Din tilmelding er afmeldt.",
-  };
+  const messages: Record<BookingAction, string> = childId
+    ? { book: "Barnet er booket.", waitlist: "Barnet er skrevet på ventelisten.", accept: "Pladsen er barnets.", cancel: "Barnets tilmelding er afmeldt." }
+    : { book: "Du er booket.", waitlist: "Du er skrevet på ventelisten.", accept: "Pladsen er din.", cancel: "Din tilmelding er afmeldt." };
   const res = await toActionResult(async () => {
     if (typeof sessionId !== "string" || sessionId.length > 64) throw new Error("bad id");
-    if (action === "book") await bookSession(actor, sessionId);
-    else if (action === "waitlist") await joinWaitlist(actor, sessionId);
-    else if (action === "accept") await acceptOffer(actor, sessionId);
-    else if (action === "cancel") await cancelBooking(actor, sessionId);
+    if (childId !== null && (typeof childId !== "string" || childId.length > 64)) throw new Error("bad child");
+    if (action === "book") await bookSession(actor, sessionId, childId);
+    else if (action === "waitlist") await joinWaitlist(actor, sessionId, childId);
+    else if (action === "accept") await acceptOffer(actor, sessionId, childId);
+    else if (action === "cancel") await cancelBooking(actor, sessionId, childId);
     else throw new Error("bad action");
   }, messages[action]);
   refresh(sessionId);
@@ -135,4 +134,23 @@ export async function calendarUrlAction(): Promise<ActionResult<string>> {
 export async function rotateCalendarAction(): Promise<ActionResult<string>> {
   const actor = toActor(await requireUser());
   return toActionResult(() => rotateCalendarToken(actor), "Du har fået et nyt link. Det gamle virker ikke længere.");
+}
+
+export async function saveChildAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const actor = toActor(await requireUser());
+  const id = String(form.get("id") ?? "") || null;
+  const raw = { name: String(form.get("name") ?? ""), birthYear: String(form.get("birthYear") ?? "") };
+  const res = await toActionResult(async () => {
+    if (id) await updateChild(actor, id, raw);
+    else await addChild(actor, raw);
+  }, id ? "Barnet er opdateret." : "Barnet er tilføjet.");
+  refresh();
+  return res;
+}
+
+export async function removeChildAction(id: string): Promise<ActionResult> {
+  const actor = toActor(await requireUser());
+  const res = await toActionResult(() => removeChild(actor, id), "Barnet er fjernet fra din profil.");
+  refresh();
+  return res;
 }

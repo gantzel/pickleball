@@ -86,6 +86,9 @@ Every session belongs to a programme, and the programme decides who may book:
 
 Rating levels are half-open `[min, max)` and may not overlap, so every rating maps to exactly one level. Sessions on a rating level take the level's band (never their own limits), so adjusting a band applies to all its sessions at once, and members move between levels automatically as their DUPR rating changes — no manual assessment. Admin → Hold creates this structure with one click ("Opret klubbens hold") and edits it. Training sessions don't record results or affect ratings.
 
+**Children**
+Children (11–17) have no login. A parent adds them under Profil → Mine børn (name and birth year only) and books on their behalf; each booking/roster entry carries the child, so a parent and several children can hold separate places on the same session. Children can book roster programmes they are on (Børnehold) and open sessions, not rating programmes. Rosters and participant lists show the child's name with the label "Barn" and the parent as contact. Removing a child or deleting the parent's account releases the child's upcoming places and deletes the child's data.
+
 **Eligibility policy**
 - Only ratings from the *active* provider count. Mock ratings never count in production.
 - A rating is *verified* if the last successful sync is within `staleAfterDays` (default 14). A failed sync inside that window keeps the rating usable, with a warning. After it, the rating is *stale* → "Rating skal verificeres" → cannot book.

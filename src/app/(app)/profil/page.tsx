@@ -8,7 +8,8 @@ import { integrationStatus } from "@/server/dupr/provider";
 import { recentSyncLogs } from "@/server/dupr/sync";
 import { ratingStateMessage } from "@/server/eligibility";
 import { memberProgress } from "@/server/progress";
-import { AvatarForm, CalendarPanel, DeleteAccountForm, ProfileForm, UnlinkButton } from "./forms";
+import { listChildren, MAX_CHILD_AGE, MIN_CHILD_AGE } from "@/server/children";
+import { AvatarForm, CalendarPanel, ChildForm, DeleteAccountForm, ProfileForm, UnlinkButton } from "./forms";
 
 export const metadata = { title: "Profil" };
 
@@ -34,7 +35,8 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const user = await requireUser();
   const actor = toActor(user);
-  const [p, logs] = await Promise.all([memberProgress(actor), recentSyncLogs(user.id, 5)]);
+  const [p, logs, kids] = await Promise.all([memberProgress(actor), recentSyncLogs(user.id, 5), listChildren(actor)]);
+  const year = new Date().getFullYear();
   const integ = integrationStatus();
   const link = p.link;
   const state = p.ratingState;
@@ -125,6 +127,25 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
             </form>
           </>
         )}
+      </section>
+
+      <section id="boern" aria-labelledby="kids-h" className="panel scroll-mt-24 space-y-4 p-5 sm:p-6">
+        <h2 id="kids-h" className="text-xl font-bold">Mine børn</h2>
+        <p className="max-w-[62ch] text-sm">
+          Har du børn i klubben, booker du for dem herfra med dit eget login. Barnets navn står på holdets deltagerliste, og du står som forælder. Man kan være medlem fra {MIN_CHILD_AGE} år. Vi gemmer kun navn og fødselsår.
+        </p>
+        {kids.length > 0 && (
+          <ul className="space-y-4">
+            {kids.map((k) => (
+              <li key={k.id} className="rounded-[12px] border border-line p-4">
+                <ChildForm child={k} minYear={year - MAX_CHILD_AGE} maxYear={year - MIN_CHILD_AGE} />
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="rounded-[12px] border border-dashed border-line p-4">
+          <ChildForm minYear={year - MAX_CHILD_AGE} maxYear={year - MIN_CHILD_AGE} />
+        </div>
       </section>
 
       <section aria-labelledby="cal-h" className="panel space-y-3 p-5 sm:p-6">

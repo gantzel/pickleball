@@ -5,8 +5,14 @@ import { Chip, StatusChip } from "@/components/status-chip";
 import { isDomainError } from "@/lib/errors";
 import { formatBand, formatDate, formatDateTime, formatRating, formatTimeRange, pluralPlaces, ruleRangeLabel } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
+import type { Availability } from "@/server/eligibility";
 import { getSessionForMember } from "@/server/sessions";
 import { getSettings } from "@/server/settings";
+
+/** For children, "verify DUPR" makes no sense: they can't book rating programmes. */
+function childAvailability(a: Availability): Availability {
+  return a.code === "VERIFY_NEEDED" || a.code === "DUPR_NEEDED" || a.code === "LOCKED_LOW" || a.code === "LOCKED_HIGH" ? { code: "NOT_FOR_CHILDREN" } : a;
+}
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -57,6 +63,23 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <h1 className="text-[clamp(1.75rem,5vw,2.75rem)] font-bold">{s.title}</h1>
         {s.focus && <p className="mt-1 text-lg text-muted">Fokus: {s.focus}</p>}
       </header>
+
+      {v.children.length > 0 && a.code !== "CANCELLED" && a.code !== "PAST" && (
+        <section className="panel mt-6 p-5 sm:p-6" aria-labelledby="kids-h">
+          <h2 id="kids-h" className="text-lg font-bold">Dine børn</h2>
+          <ul className="mt-3 divide-y divide-line">
+            {v.children.map((c) => (
+              <li key={c.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold">{c.name}</span>
+                  <StatusChip availability={childAvailability(c.availability)} />
+                </span>
+                <BookingActions sessionId={s.id} code={c.availability.code} childId={c.id} childName={c.name} compact />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="panel mt-6 p-5 sm:p-6" aria-label="Booking">
         <p className="max-w-[60ch]">{explanation[a.code]}</p>

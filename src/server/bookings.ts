@@ -11,9 +11,9 @@
  *  sooner. Ineligible members keep their queue position and are skipped.
  *  Unaccepted offers expire and the place moves on to the next in line.
  */
-import { and, asc, count, eq, gt, inArray, lte, or } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, type Tx } from "@/db";
-import { booking, duprLink, levelMember, trainingLevel, trainingSession, type AppSettings, type TrainingSession } from "@/db/schema";
+import { booking, child, duprLink, levelMember, trainingLevel, trainingSession, type AppSettings, type Child, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatRating, formatTime } from "@/lib/format";
 import type { Actor } from "./actor";
@@ -79,24 +79,58 @@ export async function sessionRule(tx: Tx, s: Pick<Session, "levelId" | "minRatin
   return accessRule(s, level ?? null);
 }
 
-export async function isOnRoster(tx: Tx, levelId: string | null, userId: string) {
+const sameChild = (childId: string | null) => (childId ? eq(booking.childId, childId) : isNull(booking.childId));
+
+export async function isOnRoster(tx: Tx, levelId: string | null, userId: string, childId: string | null = null) {
   if (!levelId) return false;
   const [r] = await tx
     .select({ u: levelMember.userId })
     .from(levelMember)
-    .where(and(eq(levelMember.levelId, levelId), eq(levelMember.userId, userId)));
+    .where(
+      and(
+        eq(levelMember.levelId, levelId),
+        eq(levelMember.userId, userId),
+        childId ? eq(levelMember.childId, childId) : isNull(levelMember.childId),
+      ),
+    );
   return !!r;
 }
 
-/** Full eligibility check for one member against one session. */
-export async function memberEligibility(tx: Tx, s: Session, rule: AccessRule, userId: string, settings: AppSettings, now: Date) {
-  const state = await loadRatingState(tx, userId, settings, now);
-  const onRoster = rule.kind === "ROSTER" ? await isOnRoster(tx, s.levelId, userId) : false;
+/** Children have no DUPR profile in the app: they can book roster and open programmes only. */
+export const CHILD_STATE: RatingState = { kind: "NOT_LINKED" };
+
+/** Full eligibility check for one participant (the member, or the member's child) against one session. */
+export async function memberEligibility(
+  tx: Tx,
+  s: Session,
+  rule: AccessRule,
+  userId: string,
+  settings: AppSettings,
+  now: Date,
+  childId: string | null = null,
+) {
+  const state = childId ? CHILD_STATE : await loadRatingState(tx, userId, settings, now);
+  const onRoster = rule.kind === "ROSTER" ? await isOnRoster(tx, s.levelId, userId, childId) : false;
   return ruleEligibility(rule, state, onRoster);
 }
 
-async function assertEligible(tx: Tx, s: Session, userId: string, settings: AppSettings, now: Date) {
-  const r = await memberEligibility(tx, s, await sessionRule(tx, s), userId, settings, now);
+/** The member's own child, or a NOT_FOUND error (never reveals other members' children). */
+export async function requireOwnChild(tx: Tx, actor: Actor, childId: string): Promise<Child> {
+  const [c] = await tx.select().from(child).where(and(eq(child.id, childId), eq(child.parentId, actor.id)));
+  if (!c) throw new DomainError("NOT_FOUND", "Barnet findes ikke på din profil.");
+  return c;
+}
+
+async function assertEligible(tx: Tx, s: Session, userId: string, settings: AppSettings, now: Date, kid: Child | null = null) {
+  const r = await memberEligibility(tx, s, await sessionRule(tx, s), userId, settings, now, kid?.id ?? null);
+  if (kid && r.code !== "ELIGIBLE") {
+    throw new DomainError(
+      "NOT_ELIGIBLE",
+      r.code === "NOT_ON_ROSTER"
+        ? `${kid.name} er ikke på holdets deltagerliste. Kontakt træneren.`
+        : "Børn kan booke børnehold og træninger, der er åbne for alle.",
+    );
+  }
   switch (r.code) {
     case "ELIGIBLE":
       return;
@@ -120,13 +154,16 @@ const sessionLink = (s: Pick<Session, "id">) => `/traeninger/${s.id}`;
 const sessionLabel = (s: Pick<Session, "title" | "startsAt">) =>
   `${s.title} (${formatDate(s.startsAt)} kl. ${formatTime(s.startsAt)})`;
 
-async function getUserBooking(tx: Tx, sessionId: string, userId: string) {
+async function getUserBooking(tx: Tx, sessionId: string, userId: string, childId: string | null = null) {
   const [b] = await tx
     .select()
     .from(booking)
-    .where(and(eq(booking.sessionId, sessionId), eq(booking.userId, userId)));
+    .where(and(eq(booking.sessionId, sessionId), eq(booking.userId, userId), sameChild(childId)));
   return b ?? null;
 }
+
+/** "Du er" for the member, "Emma er" for a child. */
+const forWhom = (kid: Child | null, self: string, other: (name: string) => string) => (kid ? other(kid.name) : self);
 
 /** Runs `fn` in a transaction holding the session lock, then flushes queued emails. */
 export async function withSessionLock<T>(
@@ -175,16 +212,24 @@ export async function offerFreedPlacesLocked(tx: Tx, s: Session, effects: Effect
   const cfg = settings ?? (await getSettings(tx));
   const rule = await sessionRule(tx, s);
   const queue = await tx
-    .select({ b: booking, link: duprLink, rostered: levelMember.userId })
+    .select({ b: booking, link: duprLink, rostered: levelMember.userId, childName: child.name })
     .from(booking)
     .leftJoin(duprLink, eq(duprLink.userId, booking.userId))
-    .leftJoin(levelMember, and(eq(levelMember.userId, booking.userId), eq(levelMember.levelId, s.levelId ?? "")))
+    .leftJoin(child, eq(child.id, booking.childId))
+    .leftJoin(
+      levelMember,
+      and(
+        eq(levelMember.userId, booking.userId),
+        eq(levelMember.levelId, s.levelId ?? ""),
+        sql`${levelMember.childId} IS NOT DISTINCT FROM ${booking.childId}`,
+      ),
+    )
     .where(and(eq(booking.sessionId, s.id), eq(booking.status, "WAITLISTED")))
     .orderBy(asc(booking.waitlistedAt), asc(booking.createdAt));
 
-  for (const { b, link, rostered } of queue) {
+  for (const { b, link, rostered, childName } of queue) {
     if (free <= 0) break;
-    const state = computeRatingState(link, cfg, now, isProviderActive);
+    const state = b.childId ? CHILD_STATE : computeRatingState(link, cfg, now, isProviderActive);
     if (ruleEligibility(rule, state, !!rostered).code !== "ELIGIBLE") continue; // keeps queue position
     const expiresAt = new Date(Math.min(now.getTime() + cfg.offerWindowHours * 3600_000, closes.getTime()));
     await tx
@@ -193,8 +238,8 @@ export async function offerFreedPlacesLocked(tx: Tx, s: Session, effects: Effect
       .where(eq(booking.id, b.id));
     await notify(tx, effects, b.userId, {
       type: "WAITLIST_OFFER",
-      title: "Der er en plads til dig!",
-      body: `En plads er blevet ledig på ${sessionLabel(s)}. Accepter senest ${formatDateTime(expiresAt)}, ellers går pladsen videre.`,
+      title: childName ? `Der er en plads til ${childName}!` : "Der er en plads til dig!",
+      body: `En plads er blevet ledig${childName ? ` til ${childName}` : ""} på ${sessionLabel(s)}. Accepter senest ${formatDateTime(expiresAt)}, ellers går pladsen videre.`,
       link: sessionLink(s),
     });
     free--;
@@ -213,17 +258,20 @@ export async function processExpiredOffers(now = new Date()) {
 
 // ─── Member actions ──────────────────────────────────────────────────────────
 
-export async function bookSession(actor: Actor, sessionId: string) {
+export async function bookSession(actor: Actor, sessionId: string, childId: string | null = null) {
   return withSessionLock(sessionId, async (tx, s, effects, now) => {
+    const kid = childId ? await requireOwnChild(tx, actor, childId) : null;
     assertBookable(s, now);
-    const existing = await getUserBooking(tx, s.id, actor.id);
-    if (existing?.status === "CONFIRMED") throw new DomainError("CONFLICT", "Du er allerede booket på denne træning.");
+    const existing = await getUserBooking(tx, s.id, actor.id, childId);
+    if (existing?.status === "CONFIRMED") {
+      throw new DomainError("CONFLICT", forWhom(kid, "Du er allerede booket på denne træning.", (n) => `${n} er allerede booket på denne træning.`));
+    }
     if (existing?.status === "OFFERED") {
-      throw new DomainError("CONFLICT", "Du har et tilbud om en plads — accepter det i stedet.");
+      throw new DomainError("CONFLICT", "Der er et tilbud om en plads — accepter det i stedet.");
     }
 
     const settings = await getSettings(tx);
-    await assertEligible(tx, s, actor.id, settings, now);
+    await assertEligible(tx, s, actor.id, settings, now, kid);
 
     if ((await heldCount(tx, s.id, now)) >= s.capacity) {
       throw new DomainError("SESSION_FULL", "Træningen er fuld. Du kan skrive dig på ventelisten.");
@@ -244,27 +292,28 @@ export async function bookSession(actor: Actor, sessionId: string) {
     if (existing) {
       await tx.update(booking).set(values).where(eq(booking.id, existing.id));
     } else {
-      await tx.insert(booking).values({ sessionId: s.id, userId: actor.id, ...values });
+      await tx.insert(booking).values({ sessionId: s.id, userId: actor.id, childId, ...values });
     }
     await notify(tx, effects, actor.id, {
       type: "BOOKING_CONFIRMED",
-      title: "Booking bekræftet",
-      body: `Du er booket på ${sessionLabel(s)} — ${s.locationName}.`,
+      title: kid ? `Booking bekræftet: ${kid.name}` : "Booking bekræftet",
+      body: `${forWhom(kid, "Du er", (n) => `${n} er`)} booket på ${sessionLabel(s)} — ${s.locationName}.`,
       link: sessionLink(s),
     });
     return { status: "CONFIRMED" as const };
   });
 }
 
-export async function joinWaitlist(actor: Actor, sessionId: string) {
+export async function joinWaitlist(actor: Actor, sessionId: string, childId: string | null = null) {
   return withSessionLock(sessionId, async (tx, s, effects, now) => {
+    const kid = childId ? await requireOwnChild(tx, actor, childId) : null;
     assertBookable(s, now);
-    const existing = await getUserBooking(tx, s.id, actor.id);
+    const existing = await getUserBooking(tx, s.id, actor.id, childId);
     if (existing && ["CONFIRMED", "WAITLISTED", "OFFERED"].includes(existing.status)) {
-      throw new DomainError("CONFLICT", "Du er allerede tilmeldt denne træning eller dens venteliste.");
+      throw new DomainError("CONFLICT", forWhom(kid, "Du er allerede tilmeldt denne træning eller dens venteliste.", (n) => `${n} er allerede tilmeldt denne træning eller dens venteliste.`));
     }
     const settings = await getSettings(tx);
-    await assertEligible(tx, s, actor.id, settings, now);
+    await assertEligible(tx, s, actor.id, settings, now, kid);
     if ((await heldCount(tx, s.id, now)) < s.capacity) {
       throw new DomainError("CONFLICT", "Der er stadig ledige pladser — book direkte i stedet.");
     }
@@ -281,45 +330,46 @@ export async function joinWaitlist(actor: Actor, sessionId: string) {
       reminderSentAt: null,
     };
     if (existing) await tx.update(booking).set(values).where(eq(booking.id, existing.id));
-    else await tx.insert(booking).values({ sessionId: s.id, userId: actor.id, ...values });
+    else await tx.insert(booking).values({ sessionId: s.id, userId: actor.id, childId, ...values });
 
-    const position = await waitlistPosition(tx, s.id, actor.id);
+    const position = await waitlistPosition(tx, s.id, actor.id, childId);
     await notify(tx, effects, actor.id, {
       type: "WAITLIST_JOINED",
-      title: "Du er på ventelisten",
-      body: `Du er nr. ${position} på ventelisten til ${sessionLabel(s)}. Vi giver besked, hvis der bliver en plads.`,
+      title: kid ? `${kid.name} er på ventelisten` : "Du er på ventelisten",
+      body: `${forWhom(kid, "Du er", (n) => `${n} er`)} nr. ${position} på ventelisten til ${sessionLabel(s)}. Vi giver besked, hvis der bliver en plads.`,
       link: sessionLink(s),
     });
     return { status: "WAITLISTED" as const, position };
   });
 }
 
-export async function waitlistPosition(tx: Tx, sessionId: string, userId: string): Promise<number> {
+export async function waitlistPosition(tx: Tx, sessionId: string, userId: string, childId: string | null = null): Promise<number> {
   const rows = await tx
-    .select({ userId: booking.userId })
+    .select({ userId: booking.userId, childId: booking.childId })
     .from(booking)
     .where(and(eq(booking.sessionId, sessionId), eq(booking.status, "WAITLISTED")))
     .orderBy(asc(booking.waitlistedAt), asc(booking.createdAt));
-  return rows.findIndex((r) => r.userId === userId) + 1;
+  return rows.findIndex((r) => r.userId === userId && (r.childId ?? null) === childId) + 1;
 }
 
-export async function acceptOffer(actor: Actor, sessionId: string) {
+export async function acceptOffer(actor: Actor, sessionId: string, childId: string | null = null) {
   return withSessionLock(sessionId, async (tx, s, effects, now) => {
-    const b = await getUserBooking(tx, s.id, actor.id);
+    const kid = childId ? await requireOwnChild(tx, actor, childId) : null;
+    const b = await getUserBooking(tx, s.id, actor.id, childId);
     if (!b || b.status !== "OFFERED" || !b.offerExpiresAt || b.offerExpiresAt <= now) {
       throw new DomainError("CONFLICT", "Tilbuddet er ikke længere gyldigt.");
     }
     if (s.status !== "PUBLISHED" || s.startsAt <= now) throw new DomainError("BOOKING_WINDOW", "Træningen kan ikke længere bookes.");
     const settings = await getSettings(tx);
-    await assertEligible(tx, s, actor.id, settings, now);
+    await assertEligible(tx, s, actor.id, settings, now, kid);
     await tx
       .update(booking)
       .set({ status: "CONFIRMED", confirmedAt: now, offerExpiresAt: null, reminderSentAt: null })
       .where(eq(booking.id, b.id));
     await notify(tx, effects, actor.id, {
       type: "BOOKING_CONFIRMED",
-      title: "Booking bekræftet",
-      body: `Du har fået pladsen på ${sessionLabel(s)}.`,
+      title: kid ? `Booking bekræftet: ${kid.name}` : "Booking bekræftet",
+      body: `${forWhom(kid, "Du har", (n) => `${n} har`)} fået pladsen på ${sessionLabel(s)}.`,
       link: sessionLink(s),
     });
     return { status: "CONFIRMED" as const };
@@ -327,11 +377,12 @@ export async function acceptOffer(actor: Actor, sessionId: string) {
 }
 
 /** Cancels a confirmed booking, leaves the waitlist, or declines an offer. */
-export async function cancelBooking(actor: Actor, sessionId: string) {
+export async function cancelBooking(actor: Actor, sessionId: string, childId: string | null = null) {
   return withSessionLock(sessionId, async (tx, s, effects, now) => {
-    const b = await getUserBooking(tx, s.id, actor.id);
+    if (childId) await requireOwnChild(tx, actor, childId);
+    const b = await getUserBooking(tx, s.id, actor.id, childId);
     if (!b || !["CONFIRMED", "WAITLISTED", "OFFERED"].includes(b.status)) {
-      throw new DomainError("NOT_FOUND", "Du har ingen aktiv booking på denne træning.");
+      throw new DomainError("NOT_FOUND", "Der er ingen aktiv booking på denne træning.");
     }
     if (b.status === "CONFIRMED") {
       if (s.startsAt <= now) throw new DomainError("BOOKING_WINDOW", "Træningen er startet og kan ikke afmeldes.");
@@ -369,10 +420,11 @@ export async function adminCancelBooking(actor: Actor, bookingId: string) {
       .update(booking)
       .set({ status: "CANCELLED", cancelledAt: now, cancelledBy: "ADMIN", offerExpiresAt: null })
       .where(eq(booking.id, bookingId));
+    const [kid] = cur.childId ? await tx.select().from(child).where(eq(child.id, cur.childId)) : [];
     await notify(tx, effects, cur.userId, {
       type: "BOOKING_CANCELLED_BY_ADMIN",
-      title: "Din booking er annulleret",
-      body: `En administrator har annulleret din tilmelding til ${sessionLabel(s)}.`,
+      title: kid ? `Booking annulleret: ${kid.name}` : "Din booking er annulleret",
+      body: `En administrator har annulleret ${kid ? `${kid.name}s` : "din"} tilmelding til ${sessionLabel(s)}.`,
       link: sessionLink(s),
     });
     await audit(tx, {
@@ -397,7 +449,8 @@ export async function adminSetAttendance(actor: Actor, bookingId: string, attend
     if (s.startsAt > new Date()) throw new DomainError("CONFLICT", "Fremmøde kan først registreres, når træningen er startet.");
     await tx.update(booking).set({ attendance }).where(eq(booking.id, bookingId));
     await audit(tx, { actorId: actor.id, action: "booking.attendance", targetType: "booking", targetId: bookingId, metadata: { attendance } });
-    if (attendance === "ATTENDED") await evaluateAttendanceAchievements(tx, effects, b.userId);
+    // Milestones belong to the member's own training, not their children's.
+    if (attendance === "ATTENDED" && !b.childId) await evaluateAttendanceAchievements(tx, effects, b.userId);
   });
   await effects.flush();
 }

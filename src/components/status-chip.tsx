@@ -26,6 +26,8 @@ export function availabilityLabel(a: Availability): { label: string; tone: Tone 
       return { label: "Kun holdets deltagere", tone: "lock" };
     case "DUPR_NEEDED":
       return { label: "Kræver DUPR-profil", tone: "alert" };
+    case "NOT_FOR_CHILDREN":
+      return { label: "Ikke for børn", tone: "lock" };
     case "VERIFY_NEEDED":
       return { label: "Rating skal verificeres", tone: "alert" };
     case "BOOKED":

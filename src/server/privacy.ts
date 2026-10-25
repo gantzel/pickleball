@@ -7,6 +7,7 @@ import { db } from "@/db";
 import {
   auditEvent,
   booking,
+  child,
   duprLink,
   duprLinkRequest,
   duprSyncLog,
@@ -43,11 +44,13 @@ export async function exportMyData(actor: Actor) {
     .where(eq(ratingSnapshot.userId, actor.id))
     .orderBy(asc(ratingSnapshot.observedAt));
   const bookings = await db
-    .select({ session: trainingSession.title, startsAt: trainingSession.startsAt, location: trainingSession.locationName, status: booking.status, attendance: booking.attendance, bookedAt: booking.createdAt, cancelledAt: booking.cancelledAt, cancelledBy: booking.cancelledBy })
+    .select({ participant: sql<string>`coalesce(${child.name}, 'Dig')`, session: trainingSession.title, startsAt: trainingSession.startsAt, location: trainingSession.locationName, status: booking.status, attendance: booking.attendance, bookedAt: booking.createdAt, cancelledAt: booking.cancelledAt, cancelledBy: booking.cancelledBy })
     .from(booking)
     .innerJoin(trainingSession, eq(trainingSession.id, booking.sessionId))
+    .leftJoin(child, eq(child.id, booking.childId))
     .where(eq(booking.userId, actor.id))
     .orderBy(desc(trainingSession.startsAt));
+  const children = await db.select({ name: child.name, birthYear: child.birthYear, addedAt: child.createdAt }).from(child).where(eq(child.parentId, actor.id));
   const achievements = await db.select({ code: userAchievement.code, awardedAt: userAchievement.awardedAt }).from(userAchievement).where(eq(userAchievement.userId, actor.id));
   const notifications = await db
     .select({ title: notification.title, body: notification.body, createdAt: notification.createdAt, readAt: notification.readAt })
@@ -66,6 +69,7 @@ export async function exportMyData(actor: Actor) {
     about: "Dine personoplysninger hos Pickleball København. Se /privatliv for hvordan de bruges.",
     profile: u,
     dupr: link ?? null,
+    children,
     ratingHistory,
     bookings,
     achievements,

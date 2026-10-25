@@ -2,7 +2,7 @@ import Link from "next/link";
 import { formatTimeRange, pluralPlaces, ruleRangeLabel } from "@/lib/format";
 import type { MemberSessionView } from "@/server/sessions";
 import { BookingActions } from "./booking-actions";
-import { Chip, StatusChip } from "./status-chip";
+import { availabilityLabel, Chip, StatusChip } from "./status-chip";
 
 const dayFmt = new Intl.DateTimeFormat("da-DK", { day: "numeric", timeZone: "Europe/Copenhagen" });
 const monFmt = new Intl.DateTimeFormat("da-DK", { month: "short", timeZone: "Europe/Copenhagen" });
@@ -37,6 +37,13 @@ export function SessionRow({ v, showActions = true }: { v: MemberSessionView; sh
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <StatusChip availability={a} />
             {s.isDemo && <Chip tone="alert">TEST</Chip>}
+            {v.children
+              .filter((c) => ["BOOKED", "WAITLISTED", "OFFERED", "AVAILABLE", "FULL_WAITLIST"].includes(c.availability.code))
+              .map((c) => (
+                <Chip key={c.id} tone={c.availability.code === "BOOKED" || c.availability.code === "OFFERED" ? "mine" : "quiet"}>
+                  {c.name}: {availabilityLabel(c.availability).label.toLowerCase()}
+                </Chip>
+              ))}
             {v.levelName && (
               <span className="inline-flex items-center gap-1.5 text-[0.8rem] font-medium text-muted">
                 <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: v.levelColor ?? "#1f5c4a" }} />

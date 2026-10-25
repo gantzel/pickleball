@@ -38,6 +38,7 @@ export default function PrivacyPage() {
           <li><strong>Profilbillede</strong>, hvis du uploader et. Billedet beskæres, og metadata som GPS-position fjernes.</li>
           <li><strong>DUPR:</strong> dit DUPR-ID, navn på din DUPR-profil, din double- og single-rating og tidspunktet for hver opdatering. Vi henter dem fra DUPR, efter du har givet tilladelse.</li>
           <li><strong>Træning:</strong> bookinger, ventelistepladser, afmeldinger, fremmøde og milepæle.</li>
+          <li><strong>Børn:</strong> Hvis du tilføjer dine børn, gemmer vi barnets navn og fødselsår samt barnets bookinger og pladser på holdenes deltagerlister. Barnet har ikke selv et login. Det er dig som forælder, der opretter, booker og kan slette.</li>
           <li><strong>Notifikationer</strong>, vi har sendt dig i appen eller på e-mail.</li>
           <li><strong>Tekniske oplysninger:</strong> login-sessioner (IP-adresse og browser), en log over hentninger fra DUPR og en log over administratorers handlinger.</li>
         </ul>
@@ -52,7 +53,7 @@ export default function PrivacyPage() {
 
         <H2>Hvem kan se dine oplysninger</H2>
         <p>
-          Du kan se dine egne oplysninger. Klubbens administratorer kan se medlemmers navne, e-mails, ratings, bookinger og fremmøde for at kunne planlægge træninger. Andre medlemmer kan ikke se din rating eller hvem der er tilmeldt. Profilbilleder vises kun for medlemmer, der er logget ind.
+          Du kan se dine egne oplysninger. Klubbens administratorer kan se medlemmers navne, e-mails, ratings, bookinger og fremmøde — og navn og fødselsår på børn, der er tilmeldt — for at kunne planlægge træninger. Andre medlemmer kan ikke se din rating eller hvem der er tilmeldt. Profilbilleder vises kun for medlemmer, der er logget ind.
         </p>
 
         <H2>Databehandlere og modtagere</H2>
@@ -81,8 +82,10 @@ export default function PrivacyPage() {
           Du kan slette din konto under Profil. Navn, e-mail, profilbillede, adgangskode, DUPR-forbindelse, ratinghistorik, notifikationer og milepæle slettes med det samme, og kommende bookinger afmeldes. Tidligere fremmøde bevares uden navn i klubbens statistik og kan ikke føres tilbage til dig.
         </p>
 
-        <H2>Alder</H2>
-        <p>Man kan blive medlem af foreningen, når man er over 12 år (vedtægternes § 3). Platformen er derfor ikke beregnet til børn på 12 år og derunder.</p>
+        <H2>Børn og alder</H2>
+        <p>
+          Man kan være medlem af klubben fra 11 år. Børn under 18 har ikke deres eget login: en forælder tilføjer barnet på sin profil og booker for det. Barnets navn vises for trænere og administratorer på deltagerlister med mærket &quot;Barn&quot; og forælderen som kontakt. Vi gemmer kun fødselsåret, ikke den fulde fødselsdato. Fjerner du barnet, eller sletter du din konto, slettes barnets oplysninger og bookinger.
+        </p>
 
         <H2>Dine rettigheder</H2>
         <p>Du har ret til at:</p>

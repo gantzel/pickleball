@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useRef, useState, useTransition } from "react";
-import { calendarUrlAction, deleteAccountAction, removeAvatarAction, rotateCalendarAction, unlinkDuprAction, updateProfileAction, uploadAvatarAction } from "@/app/actions/member";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { calendarUrlAction, deleteAccountAction, removeAvatarAction, removeChildAction, rotateCalendarAction, saveChildAction, unlinkDuprAction, updateProfileAction, uploadAvatarAction } from "@/app/actions/member";
 import { Avatar } from "@/components/avatar";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
@@ -170,5 +170,46 @@ export function CalendarPanel() {
       )}
       <FormMessage state={state} />
     </div>
+  );
+}
+
+export function ChildForm({ child, minYear, maxYear }: { child?: { id: string; name: string; birthYear: number }; minYear: number; maxYear: number }) {
+  const [state, action] = useActionState(saveChildAction, null);
+  const [pending, start] = useTransition();
+  const [rm, setRm] = useState<ActionResult | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const k = child?.id ?? "new";
+  useEffect(() => {
+    if (state?.ok && !child) formRef.current?.reset();
+  }, [state, child]);
+  return (
+    <form ref={formRef} action={action} className="grid gap-3 sm:grid-cols-[1.6fr_0.8fr_auto] sm:items-end">
+      {child && <input type="hidden" name="id" value={child.id} />}
+      <div>
+        <label htmlFor={`cn-${k}`} className="label">Barnets navn</label>
+        <input id={`cn-${k}`} name="name" defaultValue={child?.name} required minLength={2} maxLength={60} className="field" autoComplete="off" />
+      </div>
+      <div>
+        <label htmlFor={`cy-${k}`} className="label">Fødselsår</label>
+        <input id={`cy-${k}`} name="birthYear" type="number" inputMode="numeric" min={minYear} max={maxYear} defaultValue={child?.birthYear} required className="field" />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <SubmitButton className={child ? "btn btn-secondary" : "btn btn-primary"}>{child ? "Gem" : "Tilføj barn"}</SubmitButton>
+        {child &&
+          (confirm ? (
+            <>
+              <button type="button" className="btn btn-danger" disabled={pending} onClick={() => start(async () => setRm(await removeChildAction(child.id)))}>
+                Ja, fjern
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirm(false)}>Fortryd</button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-ghost text-alert" onClick={() => setConfirm(true)}>Fjern</button>
+          ))}
+      </div>
+      {confirm && <p className="text-sm text-muted sm:col-span-3">{child?.name}s kommende tilmeldinger afmeldes, og pladserne gives videre.</p>}
+      <div className="sm:col-span-3"><FormMessage state={state ?? rm} /></div>
+    </form>
   );
 }

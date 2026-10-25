@@ -181,6 +181,7 @@ export type Availability =
   | { code: "VERIFY_NEEDED"; reason: RatingState["kind"] }
   | { code: "NOT_ON_ROSTER" }
   | { code: "DUPR_NEEDED"; reason: RatingState["kind"] }
+  | { code: "NOT_FOR_CHILDREN" }
   | { code: "NOT_OPEN"; opensAt: Date }
   | { code: "CLOSED" }
   | { code: "CANCELLED" }

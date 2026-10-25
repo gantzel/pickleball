@@ -9,7 +9,7 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, gte, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { booking, trainingSession, user, type TrainingSession } from "@/db/schema";
+import { booking, child, trainingSession, user, type TrainingSession } from "@/db/schema";
 import { env } from "@/lib/env";
 import { buildIcs, type IcsEvent } from "@/lib/ics";
 import type { Actor } from "./actor";
@@ -84,13 +84,18 @@ export async function calendarFeed(token: string, now = new Date()) {
   if (!u) return null;
   const since = new Date(now.getTime() - 30 * 86400_000);
   const rows = await db
-    .select({ s: trainingSession })
+    .select({ s: trainingSession, childName: child.name, childId: child.id })
     .from(booking)
     .innerJoin(trainingSession, eq(trainingSession.id, booking.sessionId))
+    .leftJoin(child, eq(child.id, booking.childId))
     .where(and(eq(booking.userId, u.id), eq(booking.status, "CONFIRMED"), gte(trainingSession.startsAt, since)))
     .orderBy(asc(trainingSession.startsAt));
   return buildIcs(
-    rows.map((r) => sessionEvent(r.s)),
+    // Children's bookings appear in the parent's calendar, labelled with the child's name.
+    rows.map((r) => {
+      const e = sessionEvent(r.s);
+      return r.childId ? { ...e, uid: `${r.childId}.${e.uid}`, summary: `${r.childName}: ${e.summary}` } : e;
+    }),
     { name: "Mine træninger — Pickleball København", now },
   );
 }

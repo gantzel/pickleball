@@ -9,7 +9,7 @@
  *  RELEASE_AND_NOTIFY  booking is released to the waitlist; member notified.
  * Bookings are never silently cancelled.
  */
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { booking, trainingLevel, trainingSession } from "@/db/schema";
 import { formatRating, ruleRangeLabel } from "@/lib/format";
@@ -56,6 +56,7 @@ export async function applyRatingEffects(userId: string, previous: number | null
     .where(
       and(
         eq(booking.userId, userId),
+        isNull(booking.childId), // a parent's rating never affects their children's bookings
         inArray(booking.status, ["CONFIRMED", "OFFERED"]),
         eq(trainingSession.status, "PUBLISHED"),
         gt(trainingSession.startsAt, now),

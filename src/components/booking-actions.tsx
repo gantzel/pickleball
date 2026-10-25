@@ -8,7 +8,7 @@ import { toast } from "./toaster";
 type Code = "AVAILABLE" | "FULL_WAITLIST" | "OFFERED" | "WAITLISTED" | "BOOKED" | string;
 
 /** Booking controls. The server re-checks every rule; this only picks which buttons to show. */
-export function BookingActions({ sessionId, code, compact = false }: { sessionId: string; code: Code; compact?: boolean }) {
+export function BookingActions({ sessionId, code, compact = false, childId = null, childName }: { sessionId: string; code: Code; compact?: boolean; childId?: string | null; childName?: string }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -16,7 +16,7 @@ export function BookingActions({ sessionId, code, compact = false }: { sessionId
   const run = (a: BookingAction) =>
     start(async () => {
       setConfirming(false);
-      const r = await bookingAction(sessionId, a);
+      const r = await bookingAction(sessionId, a, childId);
       setResult(r.ok ? null : r);
       if (r.message) toast(r.ok, r.message);
     });
@@ -27,13 +27,13 @@ export function BookingActions({ sessionId, code, compact = false }: { sessionId
   if (code === "AVAILABLE") {
     controls = (
       <button className={`${size} btn-primary`} disabled={pending} onClick={() => run("book")}>
-        {pending ? "Booker…" : "Book plads"}
+        {pending ? "Booker…" : childName ? `Book plads til ${childName}` : "Book plads"}
       </button>
     );
   } else if (code === "FULL_WAITLIST") {
     controls = (
       <button className={`${size} btn-secondary`} disabled={pending} onClick={() => run("waitlist")}>
-        {pending ? "Skriver dig op…" : "Skriv mig på ventelisten"}
+        {pending ? "Skriver op…" : childName ? `Skriv ${childName} på ventelisten` : "Skriv mig på ventelisten"}
       </button>
     );
   } else if (code === "OFFERED") {
@@ -51,7 +51,7 @@ export function BookingActions({ sessionId, code, compact = false }: { sessionId
     const label = code === "BOOKED" ? "Afmeld" : "Forlad ventelisten";
     controls = confirming ? (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted">{code === "BOOKED" ? "Afmeld din plads?" : "Forlad ventelisten?"}</span>
+        <span className="text-sm text-muted">{code === "BOOKED" ? (childName ? `Afmeld ${childName}s plads?` : "Afmeld din plads?") : "Forlad ventelisten?"}</span>
         <button className="btn btn-danger" disabled={pending} onClick={() => run("cancel")}>
           {pending ? "Afmelder…" : `Ja, ${label.toLowerCase()}`}
         </button>

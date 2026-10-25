@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "driz
 import { fromZonedTime } from "date-fns-tz";
 import { z } from "zod";
 import { db } from "@/db";
-import { appSettings, auditEvent, booking, duprLink, duprSyncLog, levelMember, trainingLevel, trainingSession, user } from "@/db/schema";
+import { appSettings, auditEvent, booking, child, duprLink, duprSyncLog, levelMember, trainingLevel, trainingSession, user } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import type { Actor } from "./actor";
 import { requireAdmin } from "./actor";
@@ -188,44 +188,72 @@ async function requireRosterLevel(levelId: string) {
 
 export async function listRoster(actor: Actor, levelId: string) {
   requireAdmin(actor);
-  return db
-    .select({ userId: user.id, name: user.name, email: user.email, addedAt: levelMember.createdAt })
+  const rows = await db
+    .select({ userId: user.id, name: user.name, email: user.email, childId: child.id, childName: child.name, addedAt: levelMember.createdAt })
     .from(levelMember)
     .innerJoin(user, eq(user.id, levelMember.userId))
-    .where(and(eq(levelMember.levelId, levelId), isNull(user.deletedAt)))
-    .orderBy(asc(user.name));
+    .leftJoin(child, eq(child.id, levelMember.childId))
+    .where(and(eq(levelMember.levelId, levelId), isNull(user.deletedAt)));
+  // A child's entry shows the child's name; the parent is shown as contact.
+  return rows
+    .map((r) => ({
+      userId: r.userId,
+      childId: r.childId,
+      name: r.childName ?? r.name,
+      isChild: !!r.childId,
+      parentName: r.childId ? r.name : null,
+      email: r.email,
+      addedAt: r.addedAt,
+    }))
+    .sort((x, y) => x.name.localeCompare(y.name, "da"));
 }
 
-export async function addToRoster(actor: Actor, levelId: string, email: string) {
+/** The member with this email and their children — who can be put on a roster. */
+export async function rosterCandidates(actor: Actor, email: string) {
   requireAdmin(actor);
-  const level = await requireRosterLevel(levelId);
   const [u] = await db
-    .select({ id: user.id, name: user.name })
+    .select({ id: user.id, name: user.name, email: user.email })
     .from(user)
     .where(and(sql`lower(${user.email}) = ${email.trim().toLowerCase()}`, isNull(user.deletedAt)));
   if (!u) throw new DomainError("NOT_FOUND", "Der findes intet medlem med den e-mail.");
+  const kids = await db.select({ id: child.id, name: child.name, birthYear: child.birthYear }).from(child).where(eq(child.parentId, u.id)).orderBy(asc(child.createdAt));
+  return { member: u, children: kids };
+}
+
+export async function addToRoster(actor: Actor, levelId: string, email: string, childId: string | null = null) {
+  requireAdmin(actor);
+  const level = await requireRosterLevel(levelId);
+  const { member: u, children: kids } = await rosterCandidates(actor, email);
+  const kid = childId ? kids.find((k) => k.id === childId) : null;
+  if (childId && !kid) throw new DomainError("NOT_FOUND", "Barnet hører ikke til det medlem.");
   const effects = new Effects();
   await db.transaction(async (tx) => {
-    const inserted = await tx.insert(levelMember).values({ levelId, userId: u.id, addedById: actor.id }).onConflictDoNothing().returning();
+    const inserted = await tx
+      .insert(levelMember)
+      .values({ levelId, userId: u.id, childId: kid?.id ?? null, addedById: actor.id })
+      .onConflictDoNothing()
+      .returning();
     if (!inserted.length) return;
     await notify(tx, effects, u.id, {
       type: "ROSTER_ADDED",
-      title: `Du er på holdet: ${level.name}`,
-      body: `Du kan nu tilmelde dig træninger på ${level.name}.`,
+      title: kid ? `${kid.name} er på holdet: ${level.name}` : `Du er på holdet: ${level.name}`,
+      body: kid ? `Du kan nu tilmelde ${kid.name} træninger på ${level.name}.` : `Du kan nu tilmelde dig træninger på ${level.name}.`,
       link: "/traeninger",
     });
-    await audit(tx, { actorId: actor.id, action: "roster.add", targetType: "level", targetId: levelId, metadata: { userId: u.id } });
+    await audit(tx, { actorId: actor.id, action: "roster.add", targetType: "level", targetId: levelId, metadata: { userId: u.id, childId: kid?.id ?? null } });
   });
   await effects.flush();
-  return u;
+  return kid ? { name: kid.name } : { name: u.name };
 }
 
 /** Removing someone from a roster never cancels existing bookings; admins handle those. */
-export async function removeFromRoster(actor: Actor, levelId: string, userId: string) {
+export async function removeFromRoster(actor: Actor, levelId: string, userId: string, childId: string | null = null) {
   requireAdmin(actor);
   await requireRosterLevel(levelId);
-  await db.delete(levelMember).where(and(eq(levelMember.levelId, levelId), eq(levelMember.userId, userId)));
-  await audit(db, { actorId: actor.id, action: "roster.remove", targetType: "level", targetId: levelId, metadata: { userId } });
+  await db
+    .delete(levelMember)
+    .where(and(eq(levelMember.levelId, levelId), eq(levelMember.userId, userId), childId ? eq(levelMember.childId, childId) : isNull(levelMember.childId)));
+  await audit(db, { actorId: actor.id, action: "roster.remove", targetType: "level", targetId: levelId, metadata: { userId, childId } });
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────

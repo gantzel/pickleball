@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
+import { addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, rosterCandidates, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -88,18 +88,21 @@ export async function applyStandardStructureAction(): Promise<ActionResult> {
   return res as ActionResult;
 }
 
-export async function addToRosterAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+export async function rosterCandidatesAction(email: string): Promise<ActionResult<{ member: { id: string; name: string; email: string }; children: { id: string; name: string; birthYear: number }[] }>> {
   const actor = toActor(await requireAdminUser());
-  const levelId = String(form.get("levelId") ?? "");
-  const email = String(form.get("email") ?? "");
-  const res = await toActionResult(async () => (await addToRoster(actor, levelId, email)).name, "Medlemmet er tilføjet holdet.");
+  return toActionResult(() => rosterCandidates(actor, String(email).slice(0, 200)));
+}
+
+export async function addToRosterAction(levelId: string, email: string, childId: string | null): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(async () => (await addToRoster(actor, levelId, email, childId)).name, "Tilføjet til holdet.");
   refreshAdmin();
   return res as ActionResult;
 }
 
-export async function removeFromRosterAction(levelId: string, userId: string): Promise<ActionResult> {
+export async function removeFromRosterAction(levelId: string, userId: string, childId: string | null = null): Promise<ActionResult> {
   const actor = toActor(await requireAdminUser());
-  const res = await toActionResult(() => removeFromRoster(actor, levelId, userId), "Medlemmet er fjernet fra holdet.");
+  const res = await toActionResult(() => removeFromRoster(actor, levelId, userId, childId), "Fjernet fra holdet.");
   refreshAdmin();
   return res;
 }

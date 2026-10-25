@@ -72,11 +72,20 @@ export default async function AdminSession({ params, searchParams }: { params: P
                   <li key={p.booking.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-3">
                       {g.key === "waitlist" && <span className="num w-6 text-right font-semibold text-muted">{i + 1}.</span>}
-                      <Avatar name={p.user.name} avatarKey={p.user.avatarKey} size={36} />
+                      <Avatar name={p.child?.name ?? p.user.name} avatarKey={p.child ? null : p.user.avatarKey} size={36} />
                       <div className="min-w-0">
-                        <Link href={`/admin/medlemmer/${p.user.id}`} className="font-semibold hover:underline">{p.user.name}</Link>
+                        {p.child ? (
+                          <p className="font-semibold">
+                            {p.child.name}{" "}
+                            <span className="text-sm font-normal text-muted">
+                              · forælder: <Link href={`/admin/medlemmer/${p.user.id}`} className="hover:underline">{p.user.name}</Link>
+                            </span>
+                          </p>
+                        ) : (
+                          <Link href={`/admin/medlemmer/${p.user.id}`} className="font-semibold hover:underline">{p.user.name}</Link>
+                        )}
                         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                          <RatingStateChip state={p.ratingState} />
+                          {p.child ? <Chip tone="mine">Barn</Chip> : <RatingStateChip state={p.ratingState} />}
                           <Chip tone={lab.tone}>{lab.label}</Chip>
                           {p.booking.flag === "RATING_OUT_OF_RANGE" && <Chip tone="wait">Rating uden for niveau</Chip>}
                           {p.booking.status === "OFFERED" && p.booking.offerExpiresAt && <span className="text-xs text-muted">svarfrist {formatDateTime(p.booking.offerExpiresAt)}</span>}

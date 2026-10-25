@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { addToRosterAction, applyStandardStructureAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { formatBand } from "@/lib/format";
 import { FormMessage } from "@/components/form-message";
+import { Chip } from "@/components/status-chip";
 import { SubmitButton } from "@/components/submit-button";
 import type { ActionResult } from "@/lib/errors";
 
@@ -298,38 +299,89 @@ export function StandardStructureButton() {
   );
 }
 
-export function RosterPanel({ levelId, members }: { levelId: string; members: { userId: string; name: string; email: string }[] }) {
-  const [state, action] = useActionState(addToRosterAction, null);
+export interface RosterEntry {
+  userId: string;
+  childId: string | null;
+  name: string;
+  isChild: boolean;
+  parentName: string | null;
+  email: string;
+}
+
+export function RosterPanel({ levelId, members }: { levelId: string; members: RosterEntry[] }) {
   const [pending, start] = useTransition();
-  const [rmState, setRmState] = useState<ActionResult | null>(null);
+  const [state, setState] = useState<ActionResult | null>(null);
+  const [email, setEmail] = useState("");
+  const [found, setFound] = useState<{ member: { id: string; name: string; email: string }; children: { id: string; name: string; birthYear: number }[] } | null>(null);
+  const onList = (userId: string, childId: string | null) => members.some((m) => m.userId === userId && m.childId === childId);
+  const find = () =>
+    start(async () => {
+      const r = await rosterCandidatesAction(email);
+      setFound(r.ok && r.data ? r.data : null);
+      setState(r.ok ? null : r);
+    });
+  const add = (childId: string | null) =>
+    start(async () => {
+      const r = await addToRosterAction(levelId, found!.member.email, childId);
+      setState(r);
+    });
   return (
     <div className="mt-4 border-t border-line pt-4">
       <h3 className="mb-2 font-semibold">Deltagerliste ({members.length})</h3>
       {members.length > 0 ? (
         <ul className="mb-3 divide-y divide-line">
           {members.map((m) => (
-            <li key={m.userId} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span>
-                {m.name} <span className="text-muted">· {m.email}</span>
+            <li key={`${m.userId}-${m.childId ?? ""}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{m.name}</span>
+                {m.isChild && <Chip tone="mine">Barn</Chip>}
+                <span className="text-muted">{m.isChild ? `forælder: ${m.parentName} · ${m.email}` : m.email}</span>
               </span>
-              <button type="button" className="btn btn-ghost min-h-[36px] text-sm" disabled={pending} onClick={() => start(async () => setRmState(await removeFromRosterAction(levelId, m.userId)))}>
+              <button
+                type="button"
+                className="btn btn-ghost min-h-[36px] text-sm"
+                disabled={pending}
+                onClick={() => start(async () => setState(await removeFromRosterAction(levelId, m.userId, m.childId)))}
+              >
                 Fjern
               </button>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mb-3 text-sm text-muted">Ingen deltagere endnu. Kun medlemmer på listen kan tilmelde sig holdets træninger.</p>
+        <p className="mb-3 text-sm text-muted">Ingen deltagere endnu. Kun dem på listen kan tilmeldes holdets træninger.</p>
       )}
-      <form action={action} className="flex flex-wrap items-end gap-3">
-        <input type="hidden" name="levelId" value={levelId} />
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          find();
+        }}
+      >
         <div className="min-w-[16rem] flex-1">
-          <label className="label" htmlFor={`re-${levelId}`}>Tilføj medlem (e-mail)</label>
-          <input id={`re-${levelId}`} name="email" type="email" required className="field" />
+          <label className="label" htmlFor={`re-${levelId}`}>Tilføj — medlemmets eller forælderens e-mail</label>
+          <input id={`re-${levelId}`} type="email" required className="field" value={email} onChange={(e) => { setEmail(e.target.value); setFound(null); }} />
         </div>
-        <SubmitButton className="btn btn-secondary">Tilføj</SubmitButton>
+        <button type="submit" className="btn btn-secondary" disabled={pending}>Find</button>
       </form>
-      <FormMessage state={state ?? rmState} />
+      {found && (
+        <ul className="mt-3 space-y-2">
+          {[{ id: null as string | null, name: found.member.name, label: "Medlemmet selv" }, ...found.children.map((c) => ({ id: c.id as string | null, name: c.name, label: `Barn, født ${c.birthYear}` }))].map((c) => (
+            <li key={c.id ?? "self"} className="flex items-center justify-between gap-3 rounded-[10px] border border-line p-2.5 text-sm">
+              <span>
+                <span className="font-medium">{c.name}</span> <span className="text-muted">· {c.label}</span>
+              </span>
+              {onList(found.member.id, c.id) ? (
+                <span className="text-muted">På listen</span>
+              ) : (
+                <button type="button" className="btn btn-primary min-h-[36px] text-sm" disabled={pending} onClick={() => add(c.id)}>Tilføj</button>
+              )}
+            </li>
+          ))}
+          {found.children.length === 0 && <li className="text-sm text-muted">Medlemmet har ingen børn på sin profil. Forælderen tilføjer selv sine børn under Profil → Mine børn.</li>}
+        </ul>
+      )}
+      <FormMessage state={state} />
     </div>
   );
 }

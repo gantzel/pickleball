@@ -2,13 +2,13 @@ import { fromZonedTime } from "date-fns-tz";
 import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { booking, duprLink, levelMember, trainingLevel, trainingSession, user, type TrainingSession } from "@/db/schema";
+import { booking, child, duprLink, levelMember, trainingLevel, trainingSession, user, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import { CLUB_TZ, formatDate, formatTime, ruleRangeLabel } from "@/lib/format";
 import type { Actor } from "./actor";
 import { requireActor, requireAdmin } from "./actor";
 import { audit } from "./audit";
-import { lockSession, loadRatingState, offerFreedPlacesLocked, sessionRule, withSessionLock } from "./bookings";
+import { CHILD_STATE, lockSession, loadRatingState, offerFreedPlacesLocked, sessionRule, withSessionLock } from "./bookings";
 import { isProviderActive } from "./dupr/provider";
 import { Effects } from "./effects";
 import { accessRule, computeAvailability, computeRatingState, isActiveOffer, ratingFitsRule, type AccessRule, type Availability } from "./eligibility";
@@ -245,6 +245,8 @@ export interface MemberSessionView {
   levelColor: string | null;
   levelKind: string | null;
   rule: AccessRule;
+  /** One entry per child on the member's profile, with the child's own status. */
+  children: { id: string; name: string; availability: Availability }[];
   held: number;
   remaining: number;
   waitlistCount: number;
@@ -258,11 +260,15 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
   const ratingState = await loadRatingState(db, actor.id, settings, now);
   const levels = await db.select().from(trainingLevel);
   const levelById = new Map(levels.map((l) => [l.id, l]));
-  const roster = new Set(
-    (await db.select({ levelId: levelMember.levelId }).from(levelMember).where(eq(levelMember.userId, actor.id))).map((r) => r.levelId),
-  );
+  const rosterRows = await db
+    .select({ levelId: levelMember.levelId, childId: levelMember.childId })
+    .from(levelMember)
+    .where(eq(levelMember.userId, actor.id));
+  const onRoster = (levelId: string | null, childId: string | null) =>
+    !!levelId && rosterRows.some((r) => r.levelId === levelId && (r.childId ?? null) === childId);
+  const kids = await db.select({ id: child.id, name: child.name }).from(child).where(eq(child.parentId, actor.id)).orderBy(asc(child.createdAt));
   const rows = await db
-    .select({ sessionId: booking.sessionId, userId: booking.userId, status: booking.status, offerExpiresAt: booking.offerExpiresAt, flag: booking.flag, waitlistedAt: booking.waitlistedAt, createdAt: booking.createdAt })
+    .select({ sessionId: booking.sessionId, userId: booking.userId, childId: booking.childId, status: booking.status, offerExpiresAt: booking.offerExpiresAt, flag: booking.flag, waitlistedAt: booking.waitlistedAt, createdAt: booking.createdAt })
     .from(booking)
     .where(and(inArray(booking.sessionId, ids), inArray(booking.status, ["CONFIRMED", "WAITLISTED", "OFFERED"])))
     .orderBy(asc(booking.waitlistedAt), asc(booking.createdAt));
@@ -271,8 +277,11 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
     const mine = rows.filter((r) => r.sessionId === s.id);
     const held = mine.filter((r) => r.status === "CONFIRMED" || isActiveOffer(r, now)).length;
     const waitlist = mine.filter((r) => r.status === "WAITLISTED");
-    const own = mine.find((r) => r.userId === actor.id) ?? null;
-    const position = own?.status === "WAITLISTED" ? waitlist.findIndex((w) => w.userId === actor.id) + 1 : undefined;
+    const ownOf = (childId: string | null) => mine.find((r) => r.userId === actor.id && (r.childId ?? null) === childId) ?? null;
+    const positionOf = (childId: string | null, b: ReturnType<typeof ownOf>) =>
+      b?.status === "WAITLISTED" ? waitlist.findIndex((w) => w.userId === actor.id && (w.childId ?? null) === childId) + 1 : undefined;
+    const own = ownOf(null);
+    const position = positionOf(null, own);
     const level = s.levelId ? levelById.get(s.levelId) : undefined;
     const rule = accessRule(s, level ?? null);
     return {
@@ -291,8 +300,25 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
         waitlistPosition: position,
         ratingState,
         rule,
-        onRoster: !!s.levelId && roster.has(s.levelId),
+        onRoster: onRoster(s.levelId, null),
         now,
+      }),
+      children: kids.map((k) => {
+        const b = ownOf(k.id);
+        return {
+          id: k.id,
+          name: k.name,
+          availability: computeAvailability({
+            session: s,
+            heldCount: held,
+            booking: b,
+            waitlistPosition: positionOf(k.id, b),
+            ratingState: CHILD_STATE,
+            rule,
+            onRoster: onRoster(s.levelId, k.id),
+            now,
+          }),
+        };
       }),
     };
   });
@@ -384,9 +410,10 @@ export async function getSessionAdmin(actor: Actor, id: string) {
   const settings = await getSettings();
   const now = new Date();
   const rows = await db
-    .select({ b: booking, u: { id: user.id, name: user.name, email: user.email, avatarKey: user.avatarKey, deletedAt: user.deletedAt }, link: duprLink })
+    .select({ b: booking, u: { id: user.id, name: user.name, email: user.email, avatarKey: user.avatarKey, deletedAt: user.deletedAt }, link: duprLink, kid: { name: child.name, birthYear: child.birthYear } })
     .from(booking)
     .innerJoin(user, eq(user.id, booking.userId))
+    .leftJoin(child, eq(child.id, booking.childId))
     .leftJoin(duprLink, eq(duprLink.userId, booking.userId))
     .where(eq(booking.sessionId, id))
     .orderBy(asc(booking.waitlistedAt), asc(booking.confirmedAt), asc(booking.createdAt));
@@ -395,7 +422,9 @@ export async function getSessionAdmin(actor: Actor, id: string) {
   const participants = rows.map((r) => ({
     booking: r.b,
     user: r.u,
-    ratingState: computeRatingState(r.link, settings, now, isProviderActive),
+    /** Set when the place is for the member's child; `user` is then the parent. */
+    child: r.b.childId && r.kid?.name ? { name: r.kid.name, birthYear: r.kid.birthYear! } : null,
+    ratingState: r.b.childId ? CHILD_STATE : computeRatingState(r.link, settings, now, isProviderActive),
   }));
   return { session: s, participants, levelName: level?.name ?? null, access };
 }
