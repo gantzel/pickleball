@@ -7,6 +7,9 @@
  *   TO_STORAGE_DRIVER=s3 TO_S3_ENDPOINT=https://<id>.r2.cloudflarestorage.com \
  *   TO_S3_BUCKET=pbk-avatars TO_S3_ACCESS_KEY_ID=... TO_S3_SECRET_ACCESS_KEY=... \
  *   npm run storage:copy
+ *
+ * The database driver works the same way: FROM_STORAGE_DRIVER=db
+ * FROM_DATABASE_URL=postgres://… (the table stored_file must exist there).
  */
 import { copyAll, storageFromEnv } from "../src/server/storage";
 
@@ -22,6 +25,7 @@ async function main() {
   console.log(`Copying ${from.name} → ${to.name}…`);
   const r = await copyAll(from, to, "", console.log);
   console.log(`Done: ${r.copied} copied, ${r.skipped} already present.`);
+  process.exit(0); // close any database pools
 }
 
 main().catch((e) => {

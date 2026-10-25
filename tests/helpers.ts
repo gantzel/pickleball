@@ -8,7 +8,7 @@ export async function resetDb() {
   await db.execute(sql`
     TRUNCATE TABLE booking, training_session, training_level, rating_snapshot, dupr_sync_log, dupr_link,
       dupr_link_request, mock_dupr_player, notification, user_achievement, audit_event, rate_limit_bucket,
-      processed_webhook, session, account, verification, rate_limit, "user", app_settings CASCADE`);
+      processed_webhook, session, account, verification, rate_limit, "user", app_settings, stored_file CASCADE`);
   await db.execute(sql`INSERT INTO app_settings (id) VALUES (1)`);
 }
 

@@ -7,6 +7,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   bigint,
+  customType,
   boolean,
   check,
   index,
@@ -470,6 +471,18 @@ export const ratingSnapshotRelations = relations(ratingSnapshot, ({ one }) => ({
 export const trainingLevelRelations = relations(trainingLevel, ({ many }) => ({
   sessions: many(trainingSession),
 }));
+
+// ─── Files (STORAGE_DRIVER=db) ───────────────────────────────────────────────
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/** Profile photos when stored in the database instead of a disk or bucket. */
+export const storedFile = pgTable("stored_file", {
+  key: text("key").primaryKey(),
+  contentType: text("content_type").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: createdAt(),
+});
 
 export type User = typeof user.$inferSelect;
 export type DuprLink = typeof duprLink.$inferSelect;

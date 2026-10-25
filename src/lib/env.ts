@@ -23,8 +23,8 @@ const EnvSchema = z.object({
   DUPR_WEBHOOK_SECRET: z.string().optional(),
 
   CRON_SECRET: z.string().min(12).optional(),
-  /** local = UPLOAD_DIR on disk (needs a persistent disk); s3 = any S3-compatible bucket. */
-  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+  /** db = in PostgreSQL; local = UPLOAD_DIR on disk (needs a persistent disk); s3 = any S3-compatible bucket. */
+  STORAGE_DRIVER: z.enum(["db", "local", "s3"]).default("local"),
   UPLOAD_DIR: z.string().default("./storage/avatars"),
   S3_ENDPOINT: z.string().url().optional().or(z.literal("")),
   S3_REGION: z.string().optional(),

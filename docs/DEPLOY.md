@@ -1,8 +1,8 @@
 # Deploying — and moving later
 
-The app is a standard Next.js server + PostgreSQL + an S3-compatible bucket + SMTP. Nothing is tied to one provider: every piece is configured with environment variables, so moving means copying data and changing variables, never code.
+The app is a standard Next.js server + PostgreSQL + SMTP (profile photos live in the database by default, or optionally in an S3-compatible bucket). Nothing is tied to one provider: every piece is configured with environment variables, so moving means copying data and changing variables, never code.
 
-Recommended free setup (Oct 2026): **Vercel** (app) + **Neon** (database) + **Cloudflare R2** (profile photos) + **Brevo** (email) + **GitHub Actions** (5-minute background job) + your own domain. Check each provider's current free-plan terms; Vercel's Hobby plan is limited to non-commercial use.
+Recommended free setup (Oct 2026), no payment card needed: **Vercel** (app) + **Neon** (database, also holds profile photos) + **Brevo** (email) + **GitHub Actions** (5-minute background job) + your own domain. Check each provider's current free-plan terms; Vercel's Hobby plan is limited to non-commercial use.
 
 ## 0. Before you start
 
@@ -16,13 +16,11 @@ Recommended free setup (Oct 2026): **Vercel** (app) + **Neon** (database) + **Cl
 
 Migrations run automatically on every Vercel deploy (`vercel.json` → `buildCommand`).
 
-## 2. Profile photos — Cloudflare R2
+## 2. Profile photos — in the database
 
-1. In Cloudflare, enable R2 (Cloudflare may ask for a payment method even on the free tier) and create a bucket, e.g. `pbk-avatars`. Keep it **private** (no public access) — the app serves photos itself, only to logged-in members.
-2. Create an R2 API token with *Object Read & Write* on that bucket.
-3. Variables: `STORAGE_DRIVER=s3`, `S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com`, `S3_REGION=auto`, `S3_BUCKET=pbk-avatars`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
+Set `STORAGE_DRIVER=db`. Photos are re-encoded to ~512 px WebP (typically 20–50 KB), so 1,000 members use around 30–50 MB of Neon's free storage. They are backed up and moved together with the database (`pg_dump`), and only served to logged-in members.
 
-Any other S3-compatible store works the same way (AWS S3: leave `S3_ENDPOINT` empty and set the region).
+Optional, for many thousands of photos: an S3-compatible bucket (Cloudflare R2, AWS S3, Backblaze B2…) — `STORAGE_DRIVER=s3`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Keep the bucket private. Several of these providers ask for a payment method even on their free tier. Move existing photos across with `npm run storage:copy` (below).
 
 ## 3. Email — Brevo
 
@@ -43,7 +41,7 @@ Any other S3-compatible store works the same way (AWS S3: leave `S3_ENDPOINT` em
    | `DUPR_PROVIDER` | `none` until the DUPR integration exists |
    | `DEMO_MODE` | `false` |
    | `CRON_SECRET` | generated secret |
-   | `STORAGE_DRIVER`, `S3_*` | from step 2 |
+   | `STORAGE_DRIVER` | `db` (step 2) |
    | `SMTP_URL`, `MAIL_FROM` | from step 3 |
 
 3. Deploy. Check `https://<project>.vercel.app/api/health` returns `{"ok":true}`.
@@ -72,7 +70,7 @@ After that, admins promote others under Admin → Medlemmer.
 ## Launch checklist
 
 - [ ] Fill in the [bracketed] fields in the privacy policy (`src/app/privatliv/page.tsx`).
-- [ ] Data processing agreements with Vercel, Neon, Cloudflare and Brevo (all offer standard DPAs).
+- [ ] Data processing agreements with Vercel, Neon and Brevo (all offer standard DPAs).
 - [ ] `/api/health` OK, sign-up email arrives, photo upload works, background job runs.
 - [ ] `DUPR_PROVIDER=none` and `DEMO_MODE=false` in production. Never run `npm run db:seed` against production.
 
@@ -89,13 +87,13 @@ pg_restore --no-owner --no-acl -d "$NEW_DATABASE_URL" pbk.dump
 ```
 Then set the new `DATABASE_URL` (and `DATABASE_URL_UNPOOLED`). Briefly stop the old app (or accept a few minutes of read-only) to avoid writes during the copy.
 
-**Profile photos** (any combination of local disk and S3-compatible stores):
+**Profile photos** — with `STORAGE_DRIVER=db` they move with the database dump above; nothing else to do. To move them between drivers (database, local disk, S3-compatible store):
 ```bash
 FROM_STORAGE_DRIVER=s3 FROM_S3_ENDPOINT=... FROM_S3_BUCKET=... FROM_S3_ACCESS_KEY_ID=... FROM_S3_SECRET_ACCESS_KEY=... \
 TO_STORAGE_DRIVER=s3   TO_S3_ENDPOINT=...   TO_S3_BUCKET=...   TO_S3_ACCESS_KEY_ID=...   TO_S3_SECRET_ACCESS_KEY=... \
 npm run storage:copy
 ```
-Re-running is safe (files already present are skipped). Then switch the app's `S3_*` variables. On a host with a persistent disk you can also use `STORAGE_DRIVER=local`.
+Re-running is safe (files already present are skipped). For the database driver use `FROM_STORAGE_DRIVER=db FROM_DATABASE_URL=…` (or `TO_…`). Then switch the app's storage variables. On a host with a persistent disk you can also use `STORAGE_DRIVER=local`.
 
 **App** (Render, Railway, Fly.io, a VPS…): any Node.js 20+ host. Build `npm ci && npm run db:migrate && npm run build`, start `npm start` (port from `PORT`, default 3000), copy the environment variables, point the domain's DNS at the new host. If the host has no scheduler, keep the GitHub Actions job (just update its `APP_URL` if it changed).
 

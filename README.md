@@ -113,9 +113,9 @@ Call `/api/cron/tick` every ~5 minutes with `Authorization: Bearer $CRON_SECRET`
 
 ## Deployment
 
-Step-by-step guide (free setup: Vercel + Neon + Cloudflare R2 + Brevo + GitHub Actions, your own domain) and how to move each piece to another provider later: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Step-by-step guide (free setup: Vercel + Neon + Brevo + GitHub Actions, no payment card, your own domain) and how to move each piece to another provider later: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
-In short: any Node.js 20+ host works (`npm ci && npm run db:migrate && npm run build && npm start`). Profile photos use `STORAGE_DRIVER=local` (persistent disk) or `s3` (any S3-compatible bucket; required on serverless hosts). `npm run storage:copy` moves photos between storages; `pg_dump`/`pg_restore` moves the database. `/api/health` reports whether the app can reach its database.
+In short: any Node.js 20+ host works (`npm ci && npm run db:migrate && npm run build && npm start`). Profile photos use `STORAGE_DRIVER=db` (in PostgreSQL; works on serverless hosts), `local` (persistent disk) or `s3` (any S3-compatible bucket). `npm run storage:copy` moves photos between storages; `pg_dump`/`pg_restore` moves the database. `/api/health` reports whether the app can reach its database.
 
 ## Testing
 

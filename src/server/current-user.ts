@@ -18,6 +18,7 @@ export const getCurrentUser = cache(async () => {
     .from(user)
     .where(and(eq(user.id, s.user.id), isNull(user.deletedAt)));
   if (!row) return null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- strip emailVerified from the result
   const { emailVerified: _verified, ...u } = row;
   if (await maybeBootstrapAdmin(row, process.env.INITIAL_ADMIN_EMAIL)) u.role = "ADMIN";
   return u;
