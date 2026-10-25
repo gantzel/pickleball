@@ -21,6 +21,20 @@ Sources: DUPR club resources (dupr.com/club-resources-new), a community PHP clie
 - DUPR's club team: **clubs@mydupr.com** (support: support@mydupr.com). This is the route to request partner/API access, quoting the club ID.
 - From a public open-source integration (GitHub, relandpigte/sports-booking PR #51): partner credentials need DUPR's `USER::DETAIL` permission; DUPR provides a per-client-key **consent page URL** ("SSO URL") that opens in a popup and reports the member's DUPR ID back (postMessage); ratings are then fetched server-side by DUPR ID with the client key/secret, and DUPR only returns players who consented. Ask DUPR to confirm the exact flow.
 
+## Automatic level access — what it needs from DUPR (Oct 2026)
+
+The club structure (Level 1–3 and Kamphold, see README) moves members between levels automatically, so the app needs each member's *current* rating reliably. The app already refreshes a rating in three ways, so the question for DUPR is which of them partners may use and how often:
+
+| Mechanism | In the app | Ask DUPR |
+| --- | --- | --- |
+| Webhook (`RATING` topic) | `/api/dupr/webhook` → re-fetch that member's rating at once | Is the RATING webhook available to us? Signature scheme? Typical delay after a match is processed? |
+| Scheduled refresh | background job, every `syncIntervalHours` (default 24 h) per member | Rate limits per client key — is a daily (or hourly) refresh of every linked member acceptable? |
+| Member's "Synkronisér nu" | rate-limited per member | Same rate limits |
+
+A rating older than `staleAfterDays` (default 14) stops counting until refreshed, so a broken connection never leaves members on the wrong level indefinitely. Ratings change only when DUPR processes new matches; training sessions never affect them.
+
+Also ask: whether partners receive the doubles and singles rating and a reliability/provisional indicator (useful to decide how new players enter Level 1), and the terms for storing rating history.
+
 ## What Pickleball København needs to do
 
 1. Contact DUPR (partnerships / club team) and request partner API access for a club training platform. Ask specifically for:
