@@ -79,7 +79,7 @@ Every session belongs to a programme, and the programme decides who may book:
 | Novice | rating level | DUPR under 3.0 (also linked players without a rating yet) |
 | Intermediate | rating level | 3.000 – under 3.500 |
 | Advanced | rating level | 3.500 – under 4.000 |
-| Kamphold – Competition | rating level | 4.000+ |
+| Competition | rating level | 4.000+ |
 | Børnehold – Junior Pickleball | roster | members an admin has put on the roster |
 | Social Play | open | every member, no DUPR needed (a session may set its own limits) |
 | DUPR-events – Rated Play | event | linked DUPR profile + the event's own limits (inclusive) |

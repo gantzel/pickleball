@@ -39,7 +39,7 @@ async function main() {
     "Level 1": "Novice",
     "Level 2": "Intermediate",
     "Level 3": "Advanced",
-    Kamphold: "Kamphold – Competition",
+    Competition: "Competition",
     Social: "Social Play",
   };
   const L = (short: string) => levels.find((l) => l.name === byShort[short])!;
@@ -86,7 +86,7 @@ async function main() {
       [1, 16, "Level 1", "Introduktion: serv og retur", "Serv, retur og de første dinks", 16],
       [2, 17, "Level 2", "Køkkenlinjen", "Dinks og tålmodighed ved køkkenet", 12],
       [3, 16, "Level 3", "Tredjeslag og resets", "Drop vs. drive på tredjeslaget", 12],
-      [4, 17, "Kamphold", "Matchspil med coaching", "Mønstre og kommunikation", 8],
+      [4, 17, "Competition", "Matchspil med coaching", "Mønstre og kommunikation", 8],
       [5, 18, "Social", "Social Play fredag", "Kampe på tværs af niveauer", 24],
       [6, 9, "Level 2", "Formiddagstræning", "Footwork og overgangszonen", 4],
       [8, 16, "Level 1", "Foundation uge 2", "Volleys og placering", 16],

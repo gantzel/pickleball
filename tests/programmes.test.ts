@@ -79,7 +79,7 @@ describe("access rules (pure)", () => {
     const levels = STANDARD_STRUCTURE.map((l, i) => ({ ...l, id: String(i), sortOrder: i }));
     expect(currentLevel(2.1, levels)?.name).toBe("Novice");
     expect(currentLevel(3.5, levels)?.name).toBe("Advanced");
-    expect(currentLevel(4.4, levels)?.name).toBe("Kamphold – Competition");
+    expect(currentLevel(4.4, levels)?.name).toBe("Competition");
   });
 });
 
