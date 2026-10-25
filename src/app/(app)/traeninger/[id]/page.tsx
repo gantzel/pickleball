@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BookingActions } from "@/components/booking-actions";
-import { StatusChip } from "@/components/status-chip";
+import { Chip, StatusChip } from "@/components/status-chip";
 import { isDomainError } from "@/lib/errors";
 import { formatBand, formatDate, formatDateTime, formatRating, formatTimeRange, pluralPlaces, ruleRangeLabel } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
@@ -46,6 +46,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
       <header className="mt-4">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <StatusChip availability={a} />
+          {s.isDemo && <Chip tone="alert">TEST</Chip>}
           {v.levelName && (
             <span className="inline-flex items-center gap-1.5 text-sm font-medium text-muted">
               <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: v.levelColor ?? "#1f5c4a" }} />
@@ -61,6 +62,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <p className="max-w-[60ch]">{explanation[a.code]}</p>
         <div className="mt-4">
           <BookingActions sessionId={s.id} code={a.code} />
+          {(a.code === "BOOKED" || a.code === "OFFERED" || a.code === "WAITLISTED") && (
+            <a href={`/api/traeninger/${s.id}/kalender`} className="link mt-3 inline-block text-sm" download>
+              Tilføj til kalender
+            </a>
+          )}
         </div>
         {a.code !== "CANCELLED" && a.code !== "PAST" && (
           <div className="mt-5">

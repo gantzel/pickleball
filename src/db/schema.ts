@@ -118,6 +118,8 @@ export const user = pgTable("user", {
   role: roleEnum("role").notNull().default("MEMBER"),
   avatarKey: text("avatar_key"),
   emailNotifications: boolean("email_notifications").notNull().default(true),
+  /** Secret for the member's personal calendar feed (/api/kalender/<token>); rotatable. */
+  calendarToken: text("calendar_token").unique(),
   deletedAt: ts("deleted_at"),
 });
 
@@ -392,6 +394,8 @@ export const booking = pgTable(
     flag: bookingFlagEnum("flag").notNull().default("NONE"),
     flaggedAt: ts("flagged_at"),
     attendance: attendanceEnum("attendance").notNull().default("UNKNOWN"),
+    /** Day-before reminder sent (reset when re-booked or the session moves). */
+    reminderSentAt: ts("reminder_sent_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

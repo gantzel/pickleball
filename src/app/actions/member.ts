@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
 import { acceptOffer, bookSession, cancelBooking, joinWaitlist } from "@/server/bookings";
+import { calendarFeedUrl, rotateCalendarToken } from "@/server/calendar";
 import { requireUser, toActor } from "@/server/current-user";
 import { unlink } from "@/server/dupr/link";
 import { manualSync } from "@/server/dupr/sync";
@@ -124,4 +125,14 @@ export async function deleteAccountAction(_prev: ActionResult | null, form: Form
   const res = await toActionResult(() => deleteAccount(toActor(u)));
   if (!res.ok) return res;
   redirect("/login?slettet=1");
+}
+
+export async function calendarUrlAction(): Promise<ActionResult<string>> {
+  const actor = toActor(await requireUser());
+  return toActionResult(() => calendarFeedUrl(actor), "Dit kalenderlink er klar.");
+}
+
+export async function rotateCalendarAction(): Promise<ActionResult<string>> {
+  const actor = toActor(await requireUser());
+  return toActionResult(() => rotateCalendarToken(actor), "Du har fået et nyt link. Det gamle virker ikke længere.");
 }

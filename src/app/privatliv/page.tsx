@@ -20,16 +20,16 @@ export default function PrivacyPage() {
     <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       <Link href="/" className="rounded-md"><Logo /></Link>
       <h1 className="mt-8 text-3xl font-bold">Privatlivspolitik</h1>
-      <p className="mt-2 text-sm text-muted">Senest opdateret <Fill>dato</Fill></p>
+      <p className="mt-2 text-sm text-muted">Senest opdateret 25. oktober 2026</p>
 
       <div className="mt-6 space-y-3 text-[1.02rem] leading-relaxed">
         <p>
-          Her kan du læse, hvilke personoplysninger Pickleball København behandler, når du bruger træningsplatformen, hvorfor vi gør det, og hvilke rettigheder du har.
+          Her kan du læse, hvilke personoplysninger Pickleball Copenhagen (PBCPH) behandler, når du bruger træningsplatformen, hvorfor vi gør det, og hvilke rettigheder du har.
         </p>
 
         <H2>Dataansvarlig</H2>
         <p>
-          <Fill>Klubbens juridiske navn</Fill>, CVR <Fill>CVR-nr.</Fill>, <Fill>adresse</Fill>. Kontakt om persondata: <Fill>e-mail</Fill>.
+          Foreningen Pickleball Copenhagen (PBCPH), hjemsted Københavns Kommune, <Fill>CVR-nr., hvis foreningen har et</Fill>. Kontakt om persondata: <Fill>e-mail</Fill>. Bestyrelsen er ansvarlig for behandlingen, og kassereren fører medlemsregistret (vedtægternes § 7).
         </p>
 
         <H2>Hvilke oplysninger vi behandler</H2>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
 
         <H2>Formål og retsgrundlag</H2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>At give dig adgang til at booke træninger på dit niveau, administrere ventelister og registrere fremmøde. Retsgrundlag: dit medlemskab og brugen af platformen (GDPR art. 6, stk. 1, litra b).</li>
+          <li>At give dig adgang til at booke træninger på de hold, du har adgang til, administrere ventelister og registrere fremmøde. Retsgrundlag: dit medlemskab og brugen af platformen (GDPR art. 6, stk. 1, litra b).</li>
           <li>At sende dig beskeder om bookinger, ledige pladser og ændringer i din rating. E-mails kan slås fra under Profil; beskeder i appen er en del af tjenesten.</li>
           <li>Sikkerhed, fejlsøgning og dokumentation af ændringer (logs). Retsgrundlag: klubbens legitime interesse i en sikker og korrekt drift (art. 6, stk. 1, litra f).</li>
         </ul>
@@ -57,8 +57,10 @@ export default function PrivacyPage() {
 
         <H2>Databehandlere og modtagere</H2>
         <ul className="list-disc space-y-1 pl-5">
-          <li>Hosting og database: <Fill>leverandør og land</Fill></li>
-          <li>Udsendelse af e-mails: <Fill>leverandør og land</Fill></li>
+          <li>Hosting af platformen: Vercel Inc., USA. Platformen kører på servere i EU (Frankfurt).</li>
+          <li>Database og profilbilleder: Neon (Databricks Inc.), USA. Databasen ligger i EU (Frankfurt).</li>
+          <li>Udsendelse af e-mails: Brevo SAS, Frankrig (EU).</li>
+          <li>Sikkerhedskopier af databasen og den automatiske baggrundsopgave: GitHub Inc. (Microsoft), USA.</li>
           <li>DUPR (Dynamic Universal Pickleball Rating), som vi henter din rating fra med din tilladelse. DUPR behandler dine data efter sin egen privatlivspolitik.</li>
         </ul>
         <p>Vi har databehandleraftaler med vores leverandører. Overføres data til lande uden for EU/EØS, sker det på grundlag af EU-Kommissionens standardkontraktbestemmelser eller en tilsvarende garanti.</p>
@@ -70,6 +72,7 @@ export default function PrivacyPage() {
           <li>Log over hentninger fra DUPR: {RETENTION.syncLogDays} dage.</li>
           <li>Log over administratorers handlinger: {Math.round(RETENTION.auditDays / 365)} år.</li>
           <li>Udløbne login-sessioner og engangslinks slettes automatisk.</li>
+          <li>Sikkerhedskopier af databasen: 35 dage. Sletter du din konto, forsvinder dine oplysninger derfor helt fra sikkerhedskopierne senest 35 dage efter.</li>
         </ul>
         <p>Oplysninger slettes automatisk, når perioden er udløbet.</p>
 
@@ -77,6 +80,9 @@ export default function PrivacyPage() {
         <p>
           Du kan slette din konto under Profil. Navn, e-mail, profilbillede, adgangskode, DUPR-forbindelse, ratinghistorik, notifikationer og milepæle slettes med det samme, og kommende bookinger afmeldes. Tidligere fremmøde bevares uden navn i klubbens statistik og kan ikke føres tilbage til dig.
         </p>
+
+        <H2>Alder</H2>
+        <p>Man kan blive medlem af foreningen, når man er over 12 år (vedtægternes § 3). Platformen er derfor ikke beregnet til børn på 12 år og derunder.</p>
 
         <H2>Dine rettigheder</H2>
         <p>Du har ret til at:</p>

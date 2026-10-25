@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState, useTransition } from "react";
-import { deleteAccountAction, removeAvatarAction, unlinkDuprAction, updateProfileAction, uploadAvatarAction } from "@/app/actions/member";
+import { calendarUrlAction, deleteAccountAction, removeAvatarAction, rotateCalendarAction, unlinkDuprAction, updateProfileAction, uploadAvatarAction } from "@/app/actions/member";
 import { Avatar } from "@/components/avatar";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
@@ -107,5 +107,68 @@ export function DeleteAccountForm() {
       <SubmitButton className="btn btn-danger" pendingLabel="Sletter…">Slet min konto permanent</SubmitButton>
       <FormMessage state={state} />
     </form>
+  );
+}
+
+export function CalendarPanel() {
+  const [pending, start] = useTransition();
+  const [url, setUrl] = useState<string | null>(null);
+  const [state, setState] = useState<ActionResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const run = (fn: () => Promise<ActionResult<string>>) =>
+    start(async () => {
+      const r = await fn();
+      setState(r.ok ? null : r);
+      if (r.ok && r.data) setUrl(r.data);
+      setCopied(false);
+      setConfirmRotate(false);
+    });
+  const webcal = url?.replace(/^https?:/, "webcal:");
+  return (
+    <div className="space-y-3">
+      {!url ? (
+        <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => run(calendarUrlAction)}>
+          Vis mit kalenderlink
+        </button>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <input readOnly value={url} aria-label="Dit kalenderlink" className="field min-w-0 flex-1 font-mono text-xs" onFocus={(e) => e.currentTarget.select()} />
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true);
+                } catch {
+                  setCopied(false);
+                }
+              }}
+            >
+              {copied ? "Kopieret" : "Kopiér"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a className="btn btn-primary" href={webcal}>Abonnér (Apple / Outlook)</a>
+            <a className="btn btn-secondary" href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal!)}`} target="_blank" rel="noreferrer">
+              Tilføj til Google Kalender
+            </a>
+          </div>
+          <p className="hint">Linket er personligt — del det ikke. Kalenderen opdaterer sig selv, når du booker eller afmelder (det kan tage op til et par timer i nogle kalender-apps).</p>
+          {confirmRotate ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span>Det gamle link holder op med at virke. Fortsæt?</span>
+              <button type="button" className="btn btn-ghost text-alert" disabled={pending} onClick={() => run(rotateCalendarAction)}>Ja, lav nyt link</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirmRotate(false)}>Annullér</button>
+            </div>
+          ) : (
+            <button type="button" className="link text-sm" onClick={() => setConfirmRotate(true)}>Lav et nyt link</button>
+          )}
+        </>
+      )}
+      <FormMessage state={state} />
+    </div>
   );
 }

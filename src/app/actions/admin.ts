@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { addToRoster, applyStandardStructure, deleteLevel, removeFromRoster, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
+import { addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -130,4 +130,14 @@ export async function setRoleAction(userId: string, role: "MEMBER" | "ADMIN"): P
   const res = await toActionResult(() => setMemberRole(actor, userId, role), role === "ADMIN" ? "Medlemmet er nu administrator." : "Admin-adgangen er fjernet.");
   refreshAdmin();
   return res;
+}
+
+export async function testSessionsAction(command: "create" | "delete"): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res =
+    command === "create"
+      ? await toActionResult(async () => `${await createTestSessions(actor)}`, "Testtræningerne er oprettet.")
+      : await toActionResult(async () => `${await deleteTestSessions(actor)}`, "Alle testtræninger er slettet.");
+  refreshAdmin();
+  return res as ActionResult;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { addToRosterAction, applyStandardStructureAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { addToRosterAction, applyStandardStructureAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { formatBand } from "@/lib/format";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
@@ -417,5 +417,41 @@ export function RoleControl({ userId, role, isSelf }: { userId: string; role: "M
       )}
       <FormMessage state={state} />
     </div>
+  );
+}
+
+export function TestSessionsPanel({ count }: { count: number }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const run = (c: "create" | "delete") =>
+    start(async () => {
+      setState(await testSessionsAction(c));
+      setConfirm(false);
+    });
+  return (
+    <section className="panel mb-6 border-dashed p-5">
+      <h2 className="text-lg font-bold">Testtræninger</h2>
+      <p className="mt-1 max-w-[62ch] text-sm text-muted">
+        Opret testtræninger på alle hold de næste tre uger for at afprøve platformen. De er mærket TEST, kan bookes som rigtige træninger og slettes alle med ét klik — også deres bookinger. Rigtige træninger røres ikke.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {count === 0 ? (
+          <button className="btn btn-primary" disabled={pending} onClick={() => run("create")}>Opret testtræninger</button>
+        ) : confirm ? (
+          <>
+            <span className="text-sm">Slet {count} testtræninger og deres bookinger?</span>
+            <button className="btn btn-ghost text-alert" disabled={pending} onClick={() => run("delete")}>Ja, slet</button>
+            <button className="btn btn-ghost" onClick={() => setConfirm(false)}>Annullér</button>
+          </>
+        ) : (
+          <>
+            <span className="text-sm">{count} testtræninger findes.</span>
+            <button className="btn btn-secondary" disabled={pending} onClick={() => setConfirm(true)}>Slet alle testtræninger</button>
+          </>
+        )}
+        <FormMessage state={state} />
+      </div>
+    </section>
   );
 }

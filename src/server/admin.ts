@@ -1,7 +1,8 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { fromZonedTime } from "date-fns-tz";
 import { z } from "zod";
 import { db } from "@/db";
-import { appSettings, auditEvent, booking, duprLink, duprSyncLog, levelMember, trainingLevel, user } from "@/db/schema";
+import { appSettings, auditEvent, booking, duprLink, duprSyncLog, levelMember, trainingLevel, trainingSession, user } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import type { Actor } from "./actor";
 import { requireAdmin } from "./actor";
@@ -109,6 +110,71 @@ export async function applyStandardStructure(actor: Actor) {
     await audit(tx, { actorId: actor.id, action: "level.standard_structure", targetType: "level", targetId: "*", metadata: { created: rows.length } });
     return rows.length;
   });
+}
+
+// ─── Test sessions ───────────────────────────────────────────────────────────
+// Clearly marked (isDemo) sessions across every programme, so the club can try
+// the platform before launch, and remove them all again with one click.
+
+const TEST_PREFIX = "TEST – ";
+const TEST_HOURS: Record<string, [number, number]> = { LEVEL: [18, 0], SOCIAL: [19, 30], JUNIOR: [16, 30], EVENT: [13, 0] };
+
+/** A Copenhagen wall-clock time `days` from today, as a Date. */
+function copenhagenAt(days: number, hour: number, minute: number, now: Date) {
+  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Copenhagen", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const base = new Date(`${ymd}T00:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + days);
+  const local = `${base.toISOString().slice(0, 10)}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return fromZonedTime(local, "Europe/Copenhagen");
+}
+
+export async function countTestSessions() {
+  const [r] = await db.select({ n: count() }).from(trainingSession).where(eq(trainingSession.isDemo, true));
+  return Number(r?.n ?? 0);
+}
+
+export async function createTestSessions(actor: Actor, now = new Date()) {
+  requireAdmin(actor);
+  const programmes = await db.select().from(trainingLevel).orderBy(asc(trainingLevel.sortOrder), asc(trainingLevel.name));
+  if (!programmes.length) throw new DomainError("CONFLICT", "Opret klubbens hold først (Admin → Hold).");
+  if ((await countTestSessions()) > 0) throw new DomainError("CONFLICT", "Der findes allerede testtræninger. Slet dem først, hvis du vil starte forfra.");
+
+  const rows: (typeof trainingSession.$inferInsert)[] = [];
+  for (let week = 0; week < 3; week++) {
+    programmes.forEach((p, i) => {
+      const [h, m] = TEST_HOURS[p.kind] ?? [18, 0];
+      const startsAt = copenhagenAt(1 + week * 7 + (i % 7), h, m, now);
+      const isEvent = p.kind === "EVENT";
+      // Week 1's event has its own rating requirement; week 0's social play is tiny, to try the waitlist.
+      const eventLimits = isEvent && week === 1 ? { minRating: 3.0, maxRating: 3.999 } : { minRating: null, maxRating: null };
+      const capacity = p.kind === "SOCIAL" && week === 0 ? 2 : p.kind === "SOCIAL" ? 20 : p.kind === "JUNIOR" ? 10 : isEvent ? 16 : 12;
+      rows.push({
+        title: `${TEST_PREFIX}${p.name}${isEvent && week === 1 ? " (3.0–3.99)" : ""}`,
+        focus: p.kind === "LEVEL" ? ["Serv og retur", "Dinks og resets", "Tredjeslag", "Overgangszonen"][week % 4] : null,
+        description: "Testtræning til afprøvning af platformen. Den er ikke rigtig og slettes inden lancering.",
+        levelId: p.id,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 90 * 60_000),
+        locationName: "Testhallen (fiktiv)",
+        capacity,
+        ...eventLimits,
+        status: "PUBLISHED",
+        isDemo: true,
+        createdById: actor.id,
+      });
+    });
+  }
+  const created = await db.insert(trainingSession).values(rows).returning({ id: trainingSession.id });
+  await audit(db, { actorId: actor.id, action: "session.test_create", targetType: "session", targetId: "*", metadata: { created: created.length } });
+  return created.length;
+}
+
+/** Deletes every test session together with its bookings. Real sessions are never touched. */
+export async function deleteTestSessions(actor: Actor) {
+  requireAdmin(actor);
+  const deleted = await db.delete(trainingSession).where(eq(trainingSession.isDemo, true)).returning({ id: trainingSession.id });
+  await audit(db, { actorId: actor.id, action: "session.test_delete", targetType: "session", targetId: "*", metadata: { deleted: deleted.length } });
+  return deleted.length;
 }
 
 // ─── Junior rosters ──────────────────────────────────────────────────────────

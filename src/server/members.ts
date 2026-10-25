@@ -97,6 +97,7 @@ export async function deleteAccount(actor: Actor) {
         avatarKey: null,
         role: "MEMBER",
         emailNotifications: false,
+        calendarToken: null,
         deletedAt: now,
       })
       .where(eq(user.id, actor.id));

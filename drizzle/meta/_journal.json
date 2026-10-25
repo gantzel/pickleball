@@ -22,6 +22,13 @@
       "when": 1792952809439,
       "tag": "0002_programmes",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792956630971,
+      "tag": "0003_reminders_calendar",
+      "breakpoints": true
     }
   ]
 }

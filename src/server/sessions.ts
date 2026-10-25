@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { booking, duprLink, levelMember, trainingLevel, trainingSession, user, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
-import { CLUB_TZ, formatDate, formatTime } from "@/lib/format";
+import { CLUB_TZ, formatDate, formatTime, ruleRangeLabel } from "@/lib/format";
 import type { Actor } from "./actor";
 import { requireActor, requireAdmin } from "./actor";
 import { audit } from "./audit";
@@ -118,6 +118,10 @@ export async function updateSession(actor: Actor, id: string, raw: unknown) {
       throw new DomainError("CONFLICT", `Kapaciteten kan ikke være lavere end antallet af tilmeldte (${n}).`);
     }
     const [updated] = await tx.update(trainingSession).set(input).where(eq(trainingSession.id, id)).returning();
+    // Moved in time: members get a fresh reminder for the new time.
+    if (updated.startsAt.getTime() !== s.startsAt.getTime()) {
+      await tx.update(booking).set({ reminderSentAt: null }).where(eq(booking.sessionId, id));
+    }
 
     // Access changed: flag (never cancel) confirmed bookings now outside the rating band.
     let flagged = 0;
@@ -343,6 +347,7 @@ export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" 
     .orderBy(opts.scope === "past" ? desc(trainingSession.startsAt) : asc(trainingSession.startsAt))
     .limit(200);
   const ids = sessions.map((s) => s.id);
+  const levelById = new Map((await db.select().from(trainingLevel)).map((l) => [l.id, l]));
   const counts = ids.length
     ? await db
         .select({ sessionId: booking.sessionId, status: booking.status, n: count() })
@@ -359,8 +364,11 @@ export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" 
     : [];
   return sessions.map((s) => {
     const c = (st: string) => Number(counts.find((x) => x.sessionId === s.id && x.status === st)?.n ?? 0);
+    const level = s.levelId ? levelById.get(s.levelId) : undefined;
     return {
       session: s,
+      levelName: level?.name ?? null,
+      access: ruleRangeLabel(accessRule(s, level ?? null)),
       confirmed: c("CONFIRMED"),
       offered: c("OFFERED"),
       waitlisted: c("WAITLISTED"),
@@ -382,12 +390,14 @@ export async function getSessionAdmin(actor: Actor, id: string) {
     .leftJoin(duprLink, eq(duprLink.userId, booking.userId))
     .where(eq(booking.sessionId, id))
     .orderBy(asc(booking.waitlistedAt), asc(booking.confirmedAt), asc(booking.createdAt));
+  const [level] = s.levelId ? await db.select().from(trainingLevel).where(eq(trainingLevel.id, s.levelId)) : [];
+  const access = ruleRangeLabel(accessRule(s, level ?? null));
   const participants = rows.map((r) => ({
     booking: r.b,
     user: r.u,
     ratingState: computeRatingState(r.link, settings, now, isProviderActive),
   }));
-  return { session: s, participants };
+  return { session: s, participants, levelName: level?.name ?? null, access };
 }
 
 export async function adminMetrics(actor: Actor) {

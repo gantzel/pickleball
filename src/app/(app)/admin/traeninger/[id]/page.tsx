@@ -4,7 +4,7 @@ import { Avatar } from "@/components/avatar";
 import { RatingStateChip } from "@/components/rating-state-chip";
 import { Chip } from "@/components/status-chip";
 import { isDomainError } from "@/lib/errors";
-import { formatDate, formatDateTime, formatRatingRange, formatTimeRange } from "@/lib/format";
+import { formatDate, formatDateTime, formatTimeRange } from "@/lib/format";
 import { toLocalInput } from "@/lib/local-input";
 import { listLevels } from "@/server/admin";
 import { requireAdminUser, toActor } from "@/server/current-user";
@@ -31,7 +31,7 @@ export default async function AdminSession({ params, searchParams }: { params: P
     throw e;
   }
   const levels = await listLevels();
-  const { session: s, participants } = data;
+  const { session: s, participants, levelName, access } = data;
   const started = s.startsAt <= new Date();
   const editable = s.status === "DRAFT" || s.status === "PUBLISHED";
   const groups = [
@@ -53,7 +53,7 @@ export default async function AdminSession({ params, searchParams }: { params: P
           <p className="mt-1 text-muted">
             {formatDate(s.startsAt)}, {formatTimeRange(s.startsAt, s.endsAt)}, {s.locationName}
           </p>
-          <p className="text-muted">Rating {formatRatingRange(s.minRating, s.maxRating)}, <span className="num">{held}/{s.capacity}</span> pladser booket</p>
+          <p className="text-muted">{levelName ? `${levelName} — ${access}` : access}{s.isDemo ? " · TEST" : ""}, <span className="num">{held}/{s.capacity}</span> pladser booket</p>
           {s.status === "CANCELLED" && s.cancelReason && <p className="mt-1 text-alert">Årsag: {s.cancelReason}</p>}
         </div>
         <SessionCommands id={s.id} status={s.status} started={started} />

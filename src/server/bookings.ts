@@ -239,6 +239,7 @@ export async function bookSession(actor: Actor, sessionId: string) {
       cancelledBy: null,
       flag: "NONE" as const,
       flaggedAt: null,
+      reminderSentAt: null,
     };
     if (existing) {
       await tx.update(booking).set(values).where(eq(booking.id, existing.id));
@@ -277,6 +278,7 @@ export async function joinWaitlist(actor: Actor, sessionId: string) {
       cancelledBy: null,
       flag: "NONE" as const,
       flaggedAt: null,
+      reminderSentAt: null,
     };
     if (existing) await tx.update(booking).set(values).where(eq(booking.id, existing.id));
     else await tx.insert(booking).values({ sessionId: s.id, userId: actor.id, ...values });
@@ -312,7 +314,7 @@ export async function acceptOffer(actor: Actor, sessionId: string) {
     await assertEligible(tx, s, actor.id, settings, now);
     await tx
       .update(booking)
-      .set({ status: "CONFIRMED", confirmedAt: now, offerExpiresAt: null })
+      .set({ status: "CONFIRMED", confirmedAt: now, offerExpiresAt: null, reminderSentAt: null })
       .where(eq(booking.id, b.id));
     await notify(tx, effects, actor.id, {
       type: "BOOKING_CONFIRMED",

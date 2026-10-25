@@ -8,7 +8,7 @@ import { integrationStatus } from "@/server/dupr/provider";
 import { recentSyncLogs } from "@/server/dupr/sync";
 import { ratingStateMessage } from "@/server/eligibility";
 import { memberProgress } from "@/server/progress";
-import { AvatarForm, DeleteAccountForm, ProfileForm, UnlinkButton } from "./forms";
+import { AvatarForm, CalendarPanel, DeleteAccountForm, ProfileForm, UnlinkButton } from "./forms";
 
 export const metadata = { title: "Profil" };
 
@@ -125,6 +125,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
             </form>
           </>
         )}
+      </section>
+
+      <section aria-labelledby="cal-h" className="panel space-y-3 p-5 sm:p-6">
+        <h2 id="cal-h" className="text-xl font-bold">Kalender</h2>
+        <p className="max-w-[62ch] text-sm">Abonnér på dine bookinger i din egen kalender (Google, Apple, Outlook). Nye bookinger kommer automatisk med, og afmeldte forsvinder.</p>
+        <CalendarPanel />
       </section>
 
       <section aria-labelledby="data-h" className="panel space-y-3 p-5 sm:p-6">

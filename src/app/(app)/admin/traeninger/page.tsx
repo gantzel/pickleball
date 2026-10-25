@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/app-shell";
 import { Chip } from "@/components/status-chip";
-import { formatRatingRange, formatShortDate, formatTimeRange } from "@/lib/format";
+import { formatShortDate, formatTimeRange } from "@/lib/format";
 import { requireAdminUser, toActor } from "@/server/current-user";
+import { countTestSessions } from "@/server/admin";
 import { listSessionsAdmin } from "@/server/sessions";
+import { TestSessionsPanel } from "../controls";
 
 export const metadata = { title: "Træninger — admin" };
 
@@ -24,9 +26,11 @@ export default async function AdminSessions({ searchParams }: { searchParams: Pr
   const { vis } = await searchParams;
   const tab = TABS.find((t) => t.key === vis) ?? TABS[0];
   const rows = await listSessionsAdmin(toActor(await requireAdminUser()), { scope: tab.key });
+  const testCount = await countTestSessions();
   return (
     <>
       <PageHeader title="Træninger" actions={<Link href="/admin/traeninger/ny" className="btn btn-primary">Ny træning</Link>} />
+      <TestSessionsPanel count={testCount} />
       <nav aria-label="Vis" className="mb-5 flex gap-2">
         {TABS.map((t) => (
           <Link key={t.key} href={`/admin/traeninger?vis=${t.key}`} aria-current={t.key === tab.key ? "page" : undefined} className="inline-flex min-h-[40px] items-center rounded-full border border-line bg-surface px-4 text-sm font-semibold aria-[current=page]:border-court aria-[current=page]:bg-court aria-[current=page]:text-white">
@@ -43,7 +47,7 @@ export default async function AdminSessions({ searchParams }: { searchParams: Pr
                 <div>
                   <p className="font-semibold">{r.session.title}</p>
                   <p className="text-sm text-muted">
-                    {formatShortDate(r.session.startsAt)}, {formatTimeRange(r.session.startsAt, r.session.endsAt)}, {r.session.locationName}, rating {formatRatingRange(r.session.minRating, r.session.maxRating)}
+                    {formatShortDate(r.session.startsAt)}, {formatTimeRange(r.session.startsAt, r.session.endsAt)}, {r.session.locationName}, {r.levelName ? `${r.levelName} (${r.access})` : r.access}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
