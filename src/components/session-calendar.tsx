@@ -15,6 +15,8 @@ export interface CalendarItem {
   status: string;
   tone: "go" | "wait" | "lock" | "alert" | "mine" | "quiet";
   isDemo: boolean;
+  /** Extra line, e.g. "8/12 booket" in the admin calendar. */
+  meta?: string;
 }
 
 const TONE: Record<CalendarItem["tone"], string> = {
@@ -52,18 +54,31 @@ function shiftMonth(month: string, n: number) {
   return key(d).slice(0, 7);
 }
 
-export function SessionCalendar({ items, today }: { items: CalendarItem[]; today: string }) {
+export function SessionCalendar({
+  items,
+  today,
+  hrefBase = "/traeninger/",
+  minMonth,
+}: {
+  items: CalendarItem[];
+  today: string;
+  /** Where a session links to (members: /traeninger/, admins: /admin/traeninger/). */
+  hrefBase?: string;
+  /** Earliest month that can be shown (default: the current month). */
+  minMonth?: string;
+}) {
   const byDay = useMemo(() => {
     const m = new Map<string, CalendarItem[]>();
     for (const it of items) m.set(it.day, [...(m.get(it.day) ?? []), it]);
     return m;
   }, [items]);
   const thisMonth = today.slice(0, 7);
-  const firstWithItems = items[0]?.day.slice(0, 7) ?? thisMonth;
-  const [month, setMonth] = useState(firstWithItems < thisMonth ? thisMonth : firstWithItems);
+  const earliest = minMonth ?? thisMonth;
+  const firstUpcoming = items.find((i) => i.day >= today)?.day.slice(0, 7) ?? thisMonth;
+  const [month, setMonth] = useState(firstUpcoming < earliest ? earliest : firstUpcoming);
   const [selected, setSelected] = useState<string>(items.find((i) => i.day.startsWith(month))?.day ?? today);
   const days = monthGrid(month);
-  const lastMonth = items.at(-1)?.day.slice(0, 7) ?? thisMonth;
+  const lastMonth = [items.at(-1)?.day.slice(0, 7) ?? thisMonth, thisMonth].sort().at(-1)!;
   const selectedItems = byDay.get(selected) ?? [];
 
   const go = (n: number) => {
@@ -77,7 +92,7 @@ export function SessionCalendar({ items, today }: { items: CalendarItem[]; today
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold" aria-live="polite">{cap(monthFmt.format(parse(`${month}-01`)))}</h2>
         <div className="flex gap-2">
-          <button type="button" className="btn btn-secondary min-h-[40px] px-3" onClick={() => go(-1)} disabled={month <= thisMonth} aria-label="Forrige måned">
+          <button type="button" className="btn btn-secondary min-h-[40px] px-3" onClick={() => go(-1)} disabled={month <= earliest} aria-label="Forrige måned">
             ‹
           </button>
           <button type="button" className="btn btn-secondary min-h-[40px] px-3" onClick={() => go(1)} disabled={month >= lastMonth} aria-label="Næste måned">
@@ -131,7 +146,7 @@ export function SessionCalendar({ items, today }: { items: CalendarItem[]; today
                   {list.slice(0, 3).map((it) => (
                     <li key={it.id}>
                       <Link
-                        href={`/traeninger/${it.id}`}
+                        href={`${hrefBase}${it.id}`}
                         className={`block truncate rounded-[6px] border-l-4 px-1.5 py-0.5 text-[0.72rem] font-semibold leading-tight ${TONE[it.tone]}`}
                         style={{ borderLeftColor: it.levelColor ?? "#1f5c4a" }}
                         title={`${it.time} ${it.levelName ?? it.title} — ${it.status}`}
@@ -162,13 +177,14 @@ export function SessionCalendar({ items, today }: { items: CalendarItem[]; today
           <ul className="space-y-2">
             {selectedItems.map((it) => (
               <li key={it.id}>
-                <Link href={`/traeninger/${it.id}`} className="panel flex items-center gap-3 p-3 hover:border-court">
+                <Link href={`${hrefBase}${it.id}`} className="panel flex items-center gap-3 p-3 hover:border-court">
                   <span aria-hidden="true" className="h-10 w-1.5 shrink-0 rounded-full" style={{ background: it.levelColor ?? "#1f5c4a" }} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold">{it.title}</span>
                     <span className="block text-sm text-muted">
                       <span className="num">{it.time}</span>, {it.location}
                       {it.levelName ? ` · ${it.levelName}` : ""}
+                      {it.meta ? ` · ${it.meta}` : ""}
                     </span>
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1">

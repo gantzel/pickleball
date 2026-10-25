@@ -357,11 +357,13 @@ export async function memberBookingHistory(actor: Actor, limit = 20) {
 
 // ─── Admin queries ───────────────────────────────────────────────────────────
 
-export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" | "past" | "drafts" }) {
+export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" | "past" | "drafts" | "calendar" }) {
   requireAdmin(actor);
   const now = new Date();
   const where =
-    opts.scope === "drafts"
+    opts.scope === "calendar"
+      ? gte(trainingSession.startsAt, new Date(now.getTime() - 366 * 86400_000)) // everything from the last year on
+      : opts.scope === "drafts"
       ? eq(trainingSession.status, "DRAFT")
       : opts.scope === "upcoming"
         ? and(gte(trainingSession.endsAt, now), ne(trainingSession.status, "DRAFT"))
@@ -371,7 +373,7 @@ export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" 
     .from(trainingSession)
     .where(where)
     .orderBy(opts.scope === "past" ? desc(trainingSession.startsAt) : asc(trainingSession.startsAt))
-    .limit(200);
+    .limit(opts.scope === "calendar" ? 1000 : 200);
   const ids = sessions.map((s) => s.id);
   const levelById = new Map((await db.select().from(trainingLevel)).map((l) => [l.id, l]));
   const counts = ids.length
@@ -394,6 +396,7 @@ export async function listSessionsAdmin(actor: Actor, opts: { scope: "upcoming" 
     return {
       session: s,
       levelName: level?.name ?? null,
+      levelColor: level?.color ?? null,
       access: ruleRangeLabel(accessRule(s, level ?? null)),
       confirmed: c("CONFIRMED"),
       offered: c("OFFERED"),
