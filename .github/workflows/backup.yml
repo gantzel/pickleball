@@ -1,0 +1,57 @@
+# Nightly database backup. Works with any PostgreSQL host.
+#
+# Needs one repository secret:
+#   BACKUP_DATABASE_URL  the direct (non-pooled) connection string, e.g. Neon's
+#                        URL without "-pooler" in the host, with sslmode=require
+#
+# Each run dumps the database, proves the dump restores into a fresh Postgres,
+# and keeps it as a downloadable artifact for 35 days (Actions → Database
+# backup → a run → Artifacts). Login sessions, verification tokens and rate
+# limit counters are left out (schema only) — they are short-lived anyway.
+# Restore: see docs/DEPLOY.md → "Backups".
+name: Database backup
+on:
+  schedule:
+    - cron: "17 2 * * *" # 02:17 UTC every night
+  workflow_dispatch: {}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      verify:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: verify
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 10
+    steps:
+      - name: Dump
+        env:
+          DB: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          test -n "$DB" || { echo "BACKUP_DATABASE_URL secret missing"; exit 1; }
+          mkdir -p out
+          file="out/pbk-$(date -u +%Y-%m-%dT%H%MZ).dump"
+          # pg_dump from the newest client image works against older servers.
+          docker run --rm --network host -e DB -v "$PWD/out:/out" postgres:18 \
+            pg_dump --no-owner --no-acl -Fc \
+              --exclude-table-data=session --exclude-table-data=verification \
+              --exclude-table-data=rate_limit --exclude-table-data=rate_limit_bucket \
+              -f "/out/$(basename "$file")" "$DB"
+          ls -lh out
+          echo "FILE=$file" >> "$GITHUB_ENV"
+      - name: Verify the dump restores
+        run: |
+          docker run --rm --network host -v "$PWD/out:/out" -e PGPASSWORD=verify postgres:18 \
+            pg_restore --no-owner --no-acl --exit-on-error -h 127.0.0.1 -U postgres -d postgres "/out/$(basename "$FILE")"
+          docker run --rm --network host -e PGPASSWORD=verify postgres:18 \
+            psql -h 127.0.0.1 -U postgres -d postgres -tAc 'select count(*) as members from "user"'
+      - name: Keep as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pbk-db-${{ github.run_number }}
+          path: out/*.dump
+          retention-days: 35
+          if-no-files-found: error

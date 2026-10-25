@@ -61,7 +61,23 @@ Vercel's free plan only runs scheduled jobs once a day (`vercel.json` keeps a da
 
 Alternative without GitHub: a free external scheduler (e.g. cron-job.org) calling `GET https://<domain>/api/cron/tick` with header `Authorization: Bearer <CRON_SECRET>`.
 
-## 7. First admin
+## 7. Backups (every night)
+
+Neon's free plan only keeps a few hours of history, so `.github/workflows/backup.yml` dumps the database every night (02:17 UTC), checks that the dump restores into a fresh PostgreSQL, and keeps it for 35 days as a downloadable artifact.
+
+1. GitHub → repository → Settings → Secrets and variables → Actions: add `BACKUP_DATABASE_URL` = the **direct** Neon connection string (the one *without* `-pooler`, same as `DATABASE_URL_UNPOOLED`).
+2. Actions tab → *Database backup* → *Run workflow* once to test. The run shows the member count of the restored copy.
+
+The dump contains members' personal data and password hashes: keep the repository private. Login sessions and verification tokens are not included.
+
+**Restore** (into an empty database — e.g. a new Neon project or branch):
+```bash
+unzip pbk-db-123.zip            # downloaded from the run's Artifacts
+pg_restore --no-owner --no-acl -d "$NEW_DIRECT_DATABASE_URL" pbk-*.dump
+```
+Use `pg_restore` version 18 or newer. Then point `DATABASE_URL`/`DATABASE_URL_UNPOOLED` at it and redeploy. Members must log in again.
+
+## 8. First admin
 
 Set `INITIAL_ADMIN_EMAIL=you@example.com` in Vercel, then register on the live site with that address and confirm it. The account becomes admin automatically — only while the club has no admin, so the setting is harmless afterwards (you can remove it). Alternatively run `DATABASE_URL="<direct Neon URL>" npm run admin:grant -- you@example.com` from your computer.
 
@@ -71,7 +87,7 @@ After that, admins promote others under Admin → Medlemmer.
 
 - [ ] Fill in the [bracketed] fields in the privacy policy (`src/app/privatliv/page.tsx`).
 - [ ] Data processing agreements with Vercel, Neon and Brevo (all offer standard DPAs).
-- [ ] `/api/health` OK, sign-up email arrives, photo upload works, background job runs.
+- [ ] `/api/health` OK, sign-up email arrives, photo upload works, background job runs, a backup run succeeded.
 - [ ] `DUPR_PROVIDER=none` and `DEMO_MODE=false` in production. Never run `npm run db:seed` against production.
 
 ---
