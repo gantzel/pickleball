@@ -86,9 +86,9 @@ export async function deleteLevel(actor: Actor, id: string) {
 
 /** The club's standard structure (Pickleball København, Oct 2026). */
 export const STANDARD_STRUCTURE = [
-  { name: "Level 1 – Foundation", kind: "LEVEL", minRating: null, maxRating: 3.0, allowUnrated: true, color: "#3a7d5c", description: "Grundteknik og udvikling. For DUPR under 3.0 — også nye spillere med koblet DUPR-profil, der endnu ikke har en rating." },
-  { name: "Level 2 – Development", kind: "LEVEL", minRating: 3.0, maxRating: 3.5, allowUnrated: false, color: "#2f6b8f", description: "Teknik, taktik og stabilitet. For DUPR 3.0–3.49." },
-  { name: "Level 3 – Performance", kind: "LEVEL", minRating: 3.5, maxRating: 4.0, allowUnrated: false, color: "#7a4fa3", description: "Avanceret taktik og konkurrenceforberedelse. For DUPR 3.5–3.99." },
+  { name: "Novice", kind: "LEVEL", minRating: null, maxRating: 3.0, allowUnrated: true, color: "#3a7d5c", description: "Grundteknik og udvikling. For DUPR under 3.0 — også nye spillere med koblet DUPR-profil, der endnu ikke har en rating." },
+  { name: "Intermediate", kind: "LEVEL", minRating: 3.0, maxRating: 3.5, allowUnrated: false, color: "#2f6b8f", description: "Teknik, taktik og stabilitet. For DUPR 3.0–3.49." },
+  { name: "Advanced", kind: "LEVEL", minRating: 3.5, maxRating: 4.0, allowUnrated: false, color: "#7a4fa3", description: "Avanceret taktik og konkurrenceforberedelse. For DUPR 3.5–3.99." },
   { name: "Kamphold – Competition", kind: "LEVEL", minRating: 4.0, maxRating: null, allowUnrated: false, color: "#b5462f", description: "Målrettet træning for spillere på højt niveau. For DUPR 4.0+." },
   { name: "Børnehold – Junior Pickleball", kind: "JUNIOR", minRating: null, maxRating: null, allowUnrated: false, color: "#d08a1e", description: "Børnetræning og spilleglæde. Adgang efter alder og færdigheder via holdets deltagerliste." },
   { name: "Social Play", kind: "SOCIAL", minRating: null, maxRating: null, allowUnrated: false, color: "#4f7f3a", description: "Motion, kampe og fællesskab. Åbent for alle." },

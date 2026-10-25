@@ -77,8 +77,8 @@ describe("access rules (pure)", () => {
 
   it("only rating levels count for progression", () => {
     const levels = STANDARD_STRUCTURE.map((l, i) => ({ ...l, id: String(i), sortOrder: i }));
-    expect(currentLevel(2.1, levels)?.name).toBe("Level 1 – Foundation");
-    expect(currentLevel(3.5, levels)?.name).toBe("Level 3 – Performance");
+    expect(currentLevel(2.1, levels)?.name).toBe("Novice");
+    expect(currentLevel(3.5, levels)?.name).toBe("Advanced");
     expect(currentLevel(4.4, levels)?.name).toBe("Kamphold – Competition");
   });
 });

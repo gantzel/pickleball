@@ -36,9 +36,9 @@ async function main() {
   const existing = await db.select().from(trainingLevel);
   const levels = existing.length ? existing : await db.insert(trainingLevel).values(levelDefs).returning();
   const byShort: Record<string, string> = {
-    "Level 1": "Level 1 – Foundation",
-    "Level 2": "Level 2 – Development",
-    "Level 3": "Level 3 – Performance",
+    "Level 1": "Novice",
+    "Level 2": "Intermediate",
+    "Level 3": "Advanced",
     Kamphold: "Kamphold – Competition",
     Social: "Social Play",
   };
