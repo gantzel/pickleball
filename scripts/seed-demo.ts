@@ -9,6 +9,7 @@
 import { eq } from "drizzle-orm";
 import { db, pool } from "../src/db";
 import { booking, duprLink, mockDuprPlayer, trainingLevel, trainingSession, user } from "../src/db/schema";
+import { STANDARD_STRUCTURE } from "../src/server/admin";
 import { auth } from "../src/lib/auth";
 import { devToolsAllowed } from "../src/lib/env";
 import { syncLink } from "../src/server/dupr/sync";
@@ -30,15 +31,18 @@ async function main() {
   if (!devToolsAllowed()) throw new Error("Refusing to seed demo data in production (set DEMO_MODE=true for a demo deployment).");
   if (process.env.DUPR_PROVIDER !== "mock") console.warn("Note: DUPR_PROVIDER is not 'mock' — demo ratings won't count until it is.");
 
-  const levelDefs = [
-    { name: "Begynder", minRating: 2.0, maxRating: 3.0, color: "#6a8f3a", sortOrder: 1, description: "Grundslag, regler og placering." },
-    { name: "Let øvet", minRating: 3.0, maxRating: 3.5, color: "#1f7a63", sortOrder: 2, description: "Stabile dinks og tredjeslag." },
-    { name: "Øvet", minRating: 3.5, maxRating: 4.0, color: "#2c5f8a", sortOrder: 3, description: "Tempo, resets og taktik." },
-    { name: "Avanceret", minRating: 4.0, maxRating: null, color: "#5b3f86", sortOrder: 4, description: "Konkurrencespil og mønstre." },
-  ];
+  // The club's real structure (Level 1–3, Kamphold, Børnehold, Social Play, DUPR-events).
+  const levelDefs = STANDARD_STRUCTURE.map((l, i) => ({ ...l, sortOrder: (i + 1) * 10 }));
   const existing = await db.select().from(trainingLevel);
   const levels = existing.length ? existing : await db.insert(trainingLevel).values(levelDefs).returning();
-  const L = (name: string) => levels.find((l) => l.name === name)!;
+  const byShort: Record<string, string> = {
+    "Level 1": "Level 1 – Foundation",
+    "Level 2": "Level 2 – Development",
+    "Level 3": "Level 3 – Performance",
+    Kamphold: "Kamphold – Competition",
+    Social: "Social Play",
+  };
+  const L = (short: string) => levels.find((l) => l.name === byShort[short])!;
 
   const players = [
     { id: "MOCK-ANNA", name: "Anna Holm", doublesRating: 3.412, singlesRating: 3.205 },
@@ -79,13 +83,14 @@ async function main() {
       { locationName: "Amager Idrætshal", address: "Sundholmsvej 6, 2300 København S" },
     ];
     const plan: Array<[number, number, string, string, string, number]> = [
-      [1, 16, "Begynder", "Introduktion: serv og retur", "Serv, retur og de første dinks", 16],
-      [2, 17, "Let øvet", "Køkkenlinjen", "Dinks og tålmodighed ved køkkenet", 12],
-      [3, 16, "Øvet", "Tredjeslag og resets", "Drop vs. drive på tredjeslaget", 12],
-      [4, 17, "Avanceret", "Matchspil med coaching", "Mønstre og kommunikation", 8],
-      [6, 9, "Let øvet", "Formiddagstræning", "Footwork og overgangszonen", 4],
-      [8, 16, "Begynder", "Begynderhold uge 2", "Volleys og placering", 16],
-      [9, 17, "Øvet", "Tempo-spil", "Hurtige hænder og counters", 12],
+      [1, 16, "Level 1", "Introduktion: serv og retur", "Serv, retur og de første dinks", 16],
+      [2, 17, "Level 2", "Køkkenlinjen", "Dinks og tålmodighed ved køkkenet", 12],
+      [3, 16, "Level 3", "Tredjeslag og resets", "Drop vs. drive på tredjeslaget", 12],
+      [4, 17, "Kamphold", "Matchspil med coaching", "Mønstre og kommunikation", 8],
+      [5, 18, "Social", "Social Play fredag", "Kampe på tværs af niveauer", 24],
+      [6, 9, "Level 2", "Formiddagstræning", "Footwork og overgangszonen", 4],
+      [8, 16, "Level 1", "Foundation uge 2", "Volleys og placering", 16],
+      [9, 17, "Level 3", "Tempo-spil", "Hurtige hænder og counters", 12],
     ];
     const created = await db
       .insert(trainingSession)
@@ -95,8 +100,9 @@ async function main() {
           focus,
           description: `${focus}. Demo-træning oprettet af seed-scriptet.`,
           levelId: L(lvl).id,
-          minRating: L(lvl).minRating,
-          maxRating: L(lvl).maxRating !== null ? Math.round((L(lvl).maxRating! - 0.001) * 1000) / 1000 : null,
+          // Access comes from the programme (level band / open), not per-session limits.
+          minRating: null,
+          maxRating: null,
           startsAt: at(d, h),
           endsAt: at(d, h + 1, 30),
           capacity: cap,

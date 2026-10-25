@@ -55,6 +55,33 @@ export function formatRatingRange(min: number | null, max: number | null): strin
   return "Alle niveauer";
 }
 
+/** Label for a rating band; `maxExclusive` bands (levels) read "3,000 – under 3,500". */
+export function formatBand(min: number | null, max: number | null, maxExclusive: boolean): string {
+  if (!maxExclusive) return formatRatingRange(min, max);
+  if (min !== null && max !== null) return `${formatRating(min)} – under ${formatRating(max)}`;
+  if (min !== null) return `${formatRating(min)}+`;
+  if (max !== null) return `under ${formatRating(max)}`;
+  return "Alle niveauer";
+}
+
+type RuleLike =
+  | { kind: "OPEN" | "ROSTER" | "DUPR_LINKED" }
+  | { kind: "RATING"; min: number | null; max: number | null; maxExclusive: boolean };
+
+/** Short Danish description of who may book. */
+export function ruleRangeLabel(rule: RuleLike): string {
+  switch (rule.kind) {
+    case "OPEN":
+      return "Åben for alle";
+    case "ROSTER":
+      return "Holdets deltagere";
+    case "DUPR_LINKED":
+      return "Kræver DUPR-profil";
+    case "RATING":
+      return formatBand(rule.min, rule.max, rule.maxExclusive);
+  }
+}
+
 const rtf = new Intl.RelativeTimeFormat("da-DK", { numeric: "auto" });
 
 export function formatRelative(d: Date, now = new Date()): string {

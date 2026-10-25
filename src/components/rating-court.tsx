@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { TrainingLevel } from "@/db/schema";
-import { formatRating, formatRelative } from "@/lib/format";
+import { formatRating, formatRelative, formatBand } from "@/lib/format";
 import { levelProgress, ratingStateMessage, type RatingState } from "@/server/eligibility";
 import { SyncButton } from "./sync-button";
 
@@ -77,9 +77,13 @@ export function RatingCourt({
 }
 
 function LevelStrip({ levels, rating, nextId, gap }: { levels: TrainingLevel[]; rating: number | null; nextId: string | null; gap: number | null }) {
-  const lo = Math.min(...levels.map((l) => l.minRating));
+  // A level without a floor (e.g. "under 3.0") is drawn 0.75 wide.
+  const floorOf = (l: TrainingLevel) => l.minRating ?? (l.maxRating ?? 0) - 0.75;
+  const lo = Math.min(...levels.map(floorOf));
   const hiLevel = levels[levels.length - 1];
-  const hi = Math.max(hiLevel.maxRating ?? hiLevel.minRating + 0.75, ...levels.map((l) => l.maxRating ?? l.minRating));
+  const hi = Math.max(hiLevel.maxRating ?? floorOf(hiLevel) + 0.75, ...levels.map((l) => l.maxRating ?? floorOf(l)));
+  const isCurrent = (l: TrainingLevel) =>
+    rating !== null && (l.minRating === null || rating >= l.minRating) && (l.maxRating === null || rating < l.maxRating);
   const pct = (r: number) => Math.min(100, Math.max(0, ((r - lo) / (hi - lo)) * 100));
   const next = levels.find((l) => l.id === nextId) ?? null;
 
@@ -98,25 +102,24 @@ function LevelStrip({ levels, rating, nextId, gap }: { levels: TrainingLevel[]; 
         <ol className="flex h-11 overflow-hidden rounded-[8px] border-2 border-white/70" aria-label="Niveauer og ratinggrænser">
           {levels.map((l, i) => {
             const end = l.maxRating ?? hi;
-            const reached = rating !== null && rating >= l.minRating;
+            const current = isCurrent(l);
             return (
               <li
                 key={l.id}
-                className={`relative flex min-w-0 items-center px-2 text-[0.78rem] font-semibold sm:text-sm ${i > 0 ? "border-l-2 border-white/70" : ""} ${reached ? "bg-white/15" : "bg-black/10 text-white/65"}`}
-                style={{ width: `${pct(end) - pct(l.minRating)}%` }}
+                className={`relative flex min-w-0 items-center px-2 text-[0.78rem] font-semibold sm:text-sm ${i > 0 ? "border-l-2 border-white/70" : ""} ${current ? "bg-white/25" : "bg-black/10 text-white/65"}`}
+                style={{ width: `${pct(end) - pct(floorOf(l))}%` }}
               >
                 <span className="truncate">{l.name}</span>
                 <span className="sr-only">
-                  , fra {formatRating(l.minRating)}
-                  {l.maxRating !== null ? ` til under ${formatRating(l.maxRating)}` : " og op"}
-                  {reached ? ", nået" : ", ikke nået endnu"}
+                  , {formatBand(l.minRating, l.maxRating, true)}
+                  {current ? ", dit niveau" : ""}
                 </span>
               </li>
             );
           })}
         </ol>
         {next && (
-          <div aria-hidden="true" className="absolute -bottom-1 -top-1 border-l-2 border-dashed border-ball" style={{ left: `${pct(next.minRating)}%` }} />
+          <div aria-hidden="true" className="absolute -bottom-1 -top-1 border-l-2 border-dashed border-ball" style={{ left: `${pct(floorOf(next))}%` }} />
         )}
         {rating !== null && (
           <div

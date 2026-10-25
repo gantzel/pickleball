@@ -1,6 +1,6 @@
 import { EmptyState, PageHeader } from "@/components/app-shell";
 import { RatingChart } from "@/components/rating-chart";
-import { formatDate, formatMonthDay, formatRating, formatRatingRange } from "@/lib/format";
+import { formatDate, formatMonthDay, formatRating, formatBand } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
 import { ATTENDANCE_ACHIEVEMENTS, STREAK_ACHIEVEMENT, VERIFIED_ACHIEVEMENT } from "@/server/achievements";
 import { memberProgress } from "@/server/progress";
@@ -47,11 +47,12 @@ export default async function ProgressPage() {
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <section aria-labelledby="levels-h" className="panel p-5 sm:p-6">
           <h2 id="levels-h" className="text-xl font-bold">Niveauer</h2>
-          <p className="mt-1 text-sm text-muted">Et niveau åbner, når din verificerede rating når grænsen. Det giver adgang til at booke, men ikke garanti for en plads.</p>
+          <p className="mt-1 text-sm text-muted">Din verificerede DUPR-rating afgør automatisk, hvilket niveau du træner på. Stiger eller falder ratingen over en grænse, flytter din adgang med. Adgang giver ret til at booke, men ikke garanti for en plads.</p>
           <ol className="mt-4 space-y-2">
             {p.levels.map((l) => {
-              const reached = rating !== null && rating >= l.minRating;
               const current = p.progress?.current?.id === l.id;
+              const above = rating !== null && l.minRating !== null && l.minRating > rating;
+              const reached = current;
               return (
                 <li key={l.id} className={`flex items-center gap-3 rounded-[10px] border p-3 ${current ? "border-court bg-court-soft" : "border-line"}`}>
                   <span aria-hidden="true" className="h-8 w-1.5 rounded-full" style={{ background: l.color, opacity: reached ? 1 : 0.35 }} />
@@ -59,9 +60,9 @@ export default async function ProgressPage() {
                     <p className="font-semibold">
                       {l.name} {current && <span className="text-sm font-medium text-court">(dit niveau)</span>}
                     </p>
-                    <p className="num text-sm text-muted">{formatRatingRange(l.minRating, l.maxRating)}</p>
+                    <p className="num text-sm text-muted">{formatBand(l.minRating, l.maxRating, true)}</p>
                   </div>
-                  <span className="text-sm font-medium">{reached ? "Åben" : rating !== null ? `+${formatRating(l.minRating - rating)}` : "Låst"}</span>
+                  <span className="text-sm font-medium">{current ? "Din adgang" : above ? `+${formatRating((l.minRating ?? 0) - rating!)}` : rating !== null ? "Under dit niveau" : "Kræver rating"}</span>
                 </li>
               );
             })}

@@ -31,7 +31,7 @@ export function RatingChart({ points, levels, attended, now = new Date() }: { po
 
   const ticks: number[] = [];
   for (let v = minV; v <= maxV + 1e-9; v += 0.25) ticks.push(Math.round(v * 100) / 100);
-  const thresholds = levels.filter((l) => l.minRating > minV && l.minRating < maxV);
+  const thresholds = levels.flatMap((l) => (l.minRating !== null && l.minRating > minV && l.minRating < maxV ? [{ ...l, minRating: l.minRating }] : []));
   const xLabels = [t0, (t0 + t1) / 2, t1];
   const first = points[0].rating;
   const last = points[points.length - 1].rating;

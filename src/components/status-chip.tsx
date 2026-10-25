@@ -21,7 +21,11 @@ export function availabilityLabel(a: Availability): { label: string; tone: Tone 
     case "LOCKED_LOW":
       return { label: `Kræver ${formatRating(a.min)}`, tone: "lock" };
     case "LOCKED_HIGH":
-      return { label: `For ratings op til ${formatRating(a.max)}`, tone: "lock" };
+      return { label: a.exclusive ? `For ratings under ${formatRating(a.max)}` : `For ratings op til ${formatRating(a.max)}`, tone: "lock" };
+    case "NOT_ON_ROSTER":
+      return { label: "Kun holdets deltagere", tone: "lock" };
+    case "DUPR_NEEDED":
+      return { label: "Kræver DUPR-profil", tone: "alert" };
     case "VERIFY_NEEDED":
       return { label: "Rating skal verificeres", tone: "alert" };
     case "BOOKED":

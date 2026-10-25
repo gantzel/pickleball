@@ -12,12 +12,12 @@
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { booking, trainingLevel, trainingSession } from "@/db/schema";
-import { formatRating, formatRatingRange } from "@/lib/format";
+import { formatRating, ruleRangeLabel } from "@/lib/format";
 import { award, levelAchievementCode, VERIFIED_ACHIEVEMENT } from "./achievements";
 import { audit } from "./audit";
 import { lockSession, loadRatingState, offerFreedPlacesLocked } from "./bookings";
 import { Effects } from "./effects";
-import { currentLevel, inSessionRange, sortLevels } from "./eligibility";
+import { accessRule, currentLevel, ratingFitsRule, sortLevels, type AccessRule } from "./eligibility";
 import { notify, notifyAdmins } from "./notify";
 import { getSettings } from "./settings";
 
@@ -47,11 +47,12 @@ export async function applyRatingEffects(userId: string, previous: number | null
     }
   });
 
-  // Re-check upcoming bookings against the new rating.
+  // Re-check upcoming bookings against the new rating (only rating-based access).
   const upcoming = await db
-    .select({ b: booking, s: trainingSession })
+    .select({ b: booking, s: trainingSession, level: trainingLevel })
     .from(booking)
     .innerJoin(trainingSession, eq(trainingSession.id, booking.sessionId))
+    .leftJoin(trainingLevel, eq(trainingLevel.id, trainingSession.levelId))
     .where(
       and(
         eq(booking.userId, userId),
@@ -62,8 +63,9 @@ export async function applyRatingEffects(userId: string, previous: number | null
     )
     .orderBy(asc(trainingSession.startsAt));
 
-  for (const { b, s } of upcoming) {
-    const inRange = inSessionRange(rating, s.minRating, s.maxRating);
+  for (const { b, s, level } of upcoming) {
+    const rule: AccessRule = accessRule(s, level);
+    const inRange = ratingFitsRule(rule, rating);
     if (inRange && b.flag === "NONE") continue;
 
     await db.transaction(async (tx) => {
@@ -71,7 +73,7 @@ export async function applyRatingEffects(userId: string, previous: number | null
       const [cur] = await tx.select().from(booking).where(eq(booking.id, b.id));
       if (!cur || !["CONFIRMED", "OFFERED"].includes(cur.status)) return;
       const label = `${locked.title}`;
-      const range = formatRatingRange(locked.minRating, locked.maxRating);
+      const range = ruleRangeLabel(rule);
 
       if (inRange) {
         if (cur.flag !== "NONE") {

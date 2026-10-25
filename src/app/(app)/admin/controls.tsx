@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { setRoleAction, bookingAdminAction, deleteLevelAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { addToRosterAction, applyStandardStructureAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { formatBand } from "@/lib/format";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
 import type { ActionResult } from "@/lib/errors";
@@ -24,11 +25,32 @@ export interface SessionFormValues {
   bookingClosesAt?: string;
 }
 
-export function SessionForm({ values, levels, isDraft }: { values: SessionFormValues; levels: { id: string; name: string; minRating: number; maxRating: number | null }[]; isDraft: boolean }) {
+export interface LevelOption { id: string; name: string; kind: string; minRating: number | null; maxRating: number | null }
+
+/** What a programme means for a session's access, in admin language. */
+function levelAccessText(l: LevelOption | undefined) {
+  if (!l) return "Ingen hold: angiv evt. egne ratinggrænser. Uden grænser er træningen åben for alle.";
+  switch (l.kind) {
+    case "LEVEL":
+      return `Adgang følger holdets ratinggrænser (${formatBand(l.minRating, l.maxRating, true)}) og flytter automatisk med medlemmernes rating.`;
+    case "JUNIOR":
+      return "Adgang via holdets deltagerliste (Admin → Hold).";
+    case "SOCIAL":
+      return "Åben for alle medlemmer — også uden DUPR. Angiv evt. ratinggrænser for netop denne træning.";
+    case "EVENT":
+      return "Kræver koblet DUPR-profil. Angiv eventets egne ratingkrav nedenfor (valgfrit).";
+    default:
+      return "";
+  }
+}
+
+export function SessionForm({ values, levels, isDraft }: { values: SessionFormValues; levels: LevelOption[]; isDraft: boolean }) {
   const [state, action] = useActionState(saveSessionAction, null);
   const [min, setMin] = useState(values.minRating?.toString() ?? "");
   const [max, setMax] = useState(values.maxRating?.toString() ?? "");
   const [levelId, setLevelId] = useState(values.levelId ?? "");
+  const selectedLevel = levels.find((l) => l.id === levelId);
+  const ownLimits = !selectedLevel || selectedLevel.kind === "SOCIAL" || selectedLevel.kind === "EVENT";
   const v = values;
   const field = (name: string, label: string, props: React.InputHTMLAttributes<HTMLInputElement> & { hint?: string }) => {
     const { hint, ...rest } = props;
@@ -48,27 +70,21 @@ export function SessionForm({ values, levels, isDraft }: { values: SessionFormVa
         <div className="sm:col-span-2">{field("title", "Titel", { defaultValue: v.title, required: true, maxLength: 120 })}</div>
         {field("focus", "Træningsfokus", { defaultValue: v.focus ?? "", maxLength: 200, hint: "F.eks. dinks, tredjeslag, serv og retur" })}
         <div>
-          <label htmlFor="f-levelId" className="label">Niveau</label>
+          <label htmlFor="f-levelId" className="label">Hold</label>
           <select
             id="f-levelId"
             name="levelId"
             className="field"
             value={levelId}
-            onChange={(e) => {
-              setLevelId(e.target.value);
-              const l = levels.find((x) => x.id === e.target.value);
-              if (l) {
-                setMin(String(l.minRating));
-                setMax(l.maxRating !== null ? String(Math.round((l.maxRating - 0.001) * 1000) / 1000) : "");
-              }
-            }}
+            onChange={(e) => setLevelId(e.target.value)}
+            aria-describedby="h-level"
           >
-            <option value="">Intet niveau</option>
+            <option value="">Intet hold</option>
             {levels.map((l) => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
-          <p className="hint">Vælg et niveau for at udfylde ratinggrænserne.</p>
+          <p id="h-level" className="hint">{levelAccessText(selectedLevel)}</p>
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="f-description" className="label">Beskrivelse</label>
@@ -87,16 +103,22 @@ export function SessionForm({ values, levels, isDraft }: { values: SessionFormVa
 
       <fieldset className="grid gap-4 sm:grid-cols-3">
         <legend className="mb-2 text-lg font-bold">Adgang og pladser</legend>
-        <div>
-          <label htmlFor="f-minRating" className="label">Min. rating</label>
-          <input id="f-minRating" name="minRating" type="number" step="0.001" min="1" max="8.5" inputMode="decimal" className="field" value={min} onChange={(e) => setMin(e.target.value)} aria-describedby="h-range" />
-        </div>
-        <div>
-          <label htmlFor="f-maxRating" className="label">Maks. rating</label>
-          <input id="f-maxRating" name="maxRating" type="number" step="0.001" min="1" max="8.5" inputMode="decimal" className="field" value={max} onChange={(e) => setMax(e.target.value)} aria-describedby="h-range" />
-        </div>
+        {ownLimits ? (
+          <>
+            <div>
+              <label htmlFor="f-minRating" className="label">Min. rating</label>
+              <input id="f-minRating" name="minRating" type="number" step="0.001" min="1" max="8.5" inputMode="decimal" className="field" value={min} onChange={(e) => setMin(e.target.value)} aria-describedby="h-range" />
+            </div>
+            <div>
+              <label htmlFor="f-maxRating" className="label">Maks. rating</label>
+              <input id="f-maxRating" name="maxRating" type="number" step="0.001" min="1" max="8.5" inputMode="decimal" className="field" value={max} onChange={(e) => setMax(e.target.value)} aria-describedby="h-range" />
+            </div>
+          </>
+        ) : (
+          <p className="sm:col-span-2 self-end rounded-[10px] bg-surface-2 p-3 text-sm text-muted">{levelAccessText(selectedLevel)}</p>
+        )}
         {field("capacity", "Pladser", { type: "number", min: 1, max: 500, defaultValue: v.capacity ?? 16, required: true })}
-        <p id="h-range" className="hint sm:col-span-3">Begge grænser er inklusive. Lad et felt stå tomt for ingen grænse.</p>
+        {ownLimits && <p id="h-range" className="hint sm:col-span-3">Begge grænser er inklusive og kræver en verificeret DUPR-rating. Lad felterne stå tomme for ingen ratingkrav.</p>}
         {field("bookingOpensAt", "Booking åbner (valgfrit)", { type: "datetime-local", defaultValue: v.bookingOpensAt })}
         {field("bookingClosesAt", "Booking lukker (valgfrit)", { type: "datetime-local", defaultValue: v.bookingClosesAt, hint: "Standard: ved start" })}
       </fieldset>
@@ -185,36 +207,73 @@ export function ParticipantActions({ bookingId, status, attendance, canMarkAtten
   );
 }
 
-export function LevelForm({ level }: { level?: { id: string; name: string; description: string | null; minRating: number; maxRating: number | null; color: string; sortOrder: number } }) {
+const KIND_LABELS: Record<string, string> = {
+  LEVEL: "Ratingniveau (DUPR)",
+  JUNIOR: "Deltagerliste (f.eks. børnehold)",
+  SOCIAL: "Åbent for alle",
+  EVENT: "DUPR-event",
+};
+
+export interface LevelValues {
+  id: string;
+  name: string;
+  description: string | null;
+  kind: string;
+  minRating: number | null;
+  maxRating: number | null;
+  allowUnrated: boolean;
+  color: string;
+  sortOrder: number;
+}
+
+export function LevelForm({ level, nextSort = 0 }: { level?: LevelValues; nextSort?: number }) {
   const [state, action] = useActionState(saveLevelAction, null);
   const [pending, start] = useTransition();
   const [delState, setDelState] = useState<ActionResult | null>(null);
+  const [kind, setKind] = useState(level?.kind ?? "LEVEL");
+  const k = level?.id ?? "new";
   return (
-    <form action={action} className="grid gap-3 sm:grid-cols-[1.4fr_0.8fr_0.8fr_auto] sm:items-end">
+    <form action={action} className="grid gap-3 sm:grid-cols-[1.4fr_1fr_auto] sm:items-end">
       {level && <input type="hidden" name="id" value={level.id} />}
-      <input type="hidden" name="sortOrder" value={level?.sortOrder ?? 0} />
+      <input type="hidden" name="sortOrder" value={level?.sortOrder ?? nextSort} />
       <div>
-        <label className="label" htmlFor={`ln-${level?.id ?? "new"}`}>Navn</label>
-        <input id={`ln-${level?.id ?? "new"}`} name="name" defaultValue={level?.name} required maxLength={60} className="field" />
-      </div>
-      <div>
-        <label className="label" htmlFor={`lmin-${level?.id ?? "new"}`}>Fra rating</label>
-        <input id={`lmin-${level?.id ?? "new"}`} name="minRating" type="number" step="0.001" min="1" max="8.5" defaultValue={level?.minRating} required className="field" />
+        <label className="label" htmlFor={`ln-${k}`}>Navn</label>
+        <input id={`ln-${k}`} name="name" defaultValue={level?.name} required maxLength={60} className="field" />
       </div>
       <div>
-        <label className="label" htmlFor={`lmax-${level?.id ?? "new"}`}>Til under</label>
-        <input id={`lmax-${level?.id ?? "new"}`} name="maxRating" type="number" step="0.001" min="1" max="8.5" defaultValue={level?.maxRating ?? ""} className="field" />
+        <label className="label" htmlFor={`lk-${k}`}>Adgang</label>
+        <select id={`lk-${k}`} name="kind" className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
+          {Object.entries(KIND_LABELS).map(([value, label]) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
+        </select>
       </div>
       <div>
-        <label className="label" htmlFor={`lc-${level?.id ?? "new"}`}>Farve</label>
-        <input id={`lc-${level?.id ?? "new"}`} name="color" type="color" defaultValue={level?.color ?? "#2f6b4f"} className="h-11 w-16 cursor-pointer rounded-[10px] border border-line bg-surface p-1" />
+        <label className="label" htmlFor={`lc-${k}`}>Farve</label>
+        <input id={`lc-${k}`} name="color" type="color" defaultValue={level?.color ?? "#2f6b4f"} className="h-11 w-16 cursor-pointer rounded-[10px] border border-line bg-surface p-1" />
       </div>
-      <div className="sm:col-span-4">
-        <label className="label" htmlFor={`ld-${level?.id ?? "new"}`}>Beskrivelse</label>
-        <input id={`ld-${level?.id ?? "new"}`} name="description" defaultValue={level?.description ?? ""} maxLength={300} className="field" />
+      {kind === "LEVEL" && (
+        <div className="grid gap-3 sm:col-span-3 sm:grid-cols-[1fr_1fr_1.4fr] sm:items-end">
+          <div>
+            <label className="label" htmlFor={`lmin-${k}`}>Fra rating (inkl.)</label>
+            <input id={`lmin-${k}`} name="minRating" type="number" step="0.001" min="1" max="8.5" defaultValue={level?.minRating ?? ""} placeholder="Ingen bundgrænse" className="field" />
+          </div>
+          <div>
+            <label className="label" htmlFor={`lmax-${k}`}>Til under</label>
+            <input id={`lmax-${k}`} name="maxRating" type="number" step="0.001" min="1" max="8.5" defaultValue={level?.maxRating ?? ""} placeholder="Ingen topgrænse" className="field" />
+          </div>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input type="checkbox" name="allowUnrated" defaultChecked={level?.allowUnrated ?? false} className="h-5 w-5" />
+            Nye spillere uden DUPR-rating må booke
+          </label>
+        </div>
+      )}
+      <div className="sm:col-span-3">
+        <label className="label" htmlFor={`ld-${k}`}>Beskrivelse</label>
+        <input id={`ld-${k}`} name="description" defaultValue={level?.description ?? ""} maxLength={300} className="field" />
       </div>
-      <div className="flex flex-wrap items-center gap-3 sm:col-span-4">
-        <SubmitButton>{level ? "Gem niveau" : "Opret niveau"}</SubmitButton>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-3">
+        <SubmitButton>{level ? "Gem hold" : "Opret hold"}</SubmitButton>
         {level && (
           <button type="button" className="btn btn-ghost text-alert" disabled={pending} onClick={() => start(async () => setDelState(await deleteLevelAction(level.id)))}>
             Slet
@@ -223,6 +282,55 @@ export function LevelForm({ level }: { level?: { id: string; name: string; descr
         <FormMessage state={state ?? delState} />
       </div>
     </form>
+  );
+}
+
+export function StandardStructureButton() {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button className="btn btn-primary" disabled={pending} onClick={() => start(async () => setState(await applyStandardStructureAction()))}>
+        Opret klubbens hold
+      </button>
+      <FormMessage state={state} />
+    </div>
+  );
+}
+
+export function RosterPanel({ levelId, members }: { levelId: string; members: { userId: string; name: string; email: string }[] }) {
+  const [state, action] = useActionState(addToRosterAction, null);
+  const [pending, start] = useTransition();
+  const [rmState, setRmState] = useState<ActionResult | null>(null);
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      <h3 className="mb-2 font-semibold">Deltagerliste ({members.length})</h3>
+      {members.length > 0 ? (
+        <ul className="mb-3 divide-y divide-line">
+          {members.map((m) => (
+            <li key={m.userId} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span>
+                {m.name} <span className="text-muted">· {m.email}</span>
+              </span>
+              <button type="button" className="btn btn-ghost min-h-[36px] text-sm" disabled={pending} onClick={() => start(async () => setRmState(await removeFromRosterAction(levelId, m.userId)))}>
+                Fjern
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-3 text-sm text-muted">Ingen deltagere endnu. Kun medlemmer på listen kan tilmelde sig holdets træninger.</p>
+      )}
+      <form action={action} className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="levelId" value={levelId} />
+        <div className="min-w-[16rem] flex-1">
+          <label className="label" htmlFor={`re-${levelId}`}>Tilføj medlem (e-mail)</label>
+          <input id={`re-${levelId}`} name="email" type="email" required className="field" />
+        </div>
+        <SubmitButton className="btn btn-secondary">Tilføj</SubmitButton>
+      </form>
+      <FormMessage state={state ?? rmState} />
+    </div>
   );
 }
 

@@ -83,6 +83,16 @@ export const bookingStatusEnum = pgEnum("booking_status", [
   "CANCELLED",
   "EXPIRED", // offer not accepted in time
 ]);
+
+/**
+ * How a programme ("hold") grants access:
+ *  LEVEL       verified DUPR rating within [min, max) — access moves automatically
+ *              with the rating (Level 1–3 and Kamphold)
+ *  JUNIOR      members on the programme's roster (deltagerliste)
+ *  SOCIAL      open to every member; optional per-session rating limits
+ *  EVENT       DUPR events — a linked DUPR profile; optional per-session rating limits
+ */
+export const programKindEnum = pgEnum("program_kind", ["LEVEL", "JUNIOR", "SOCIAL", "EVENT"]);
 export const cancelledByEnum = pgEnum("cancelled_by", ["MEMBER", "ADMIN", "SYSTEM"]);
 export const bookingFlagEnum = pgEnum("booking_flag", ["NONE", "RATING_OUT_OF_RANGE"]);
 export const attendanceEnum = pgEnum("attendance", ["UNKNOWN", "ATTENDED", "NO_SHOW"]);
@@ -281,8 +291,13 @@ export const trainingLevel = pgTable(
     id: id(),
     name: text("name").notNull(),
     description: text("description"),
-    minRating: rating("min_rating").notNull(),
+    kind: programKindEnum("kind").notNull().default("LEVEL"),
+    /** LEVEL: lower bound (inclusive); null = no floor. */
+    minRating: rating("min_rating"),
+    /** LEVEL: upper bound (exclusive); null = no ceiling. */
     maxRating: rating("max_rating"),
+    /** LEVEL: members with a linked DUPR profile but no rating yet may book (beginners). */
+    allowUnrated: boolean("allow_unrated").notNull().default(false),
     color: text("color").notNull().default("#2f6b4f"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: createdAt(),
@@ -291,9 +306,33 @@ export const trainingLevel = pgTable(
   (t) => [
     check(
       "training_level_range_chk",
-      sql`${t.maxRating} IS NULL OR ${t.maxRating} > ${t.minRating}`,
+      sql`${t.maxRating} IS NULL OR ${t.minRating} IS NULL OR ${t.maxRating} > ${t.minRating}`,
+    ),
+    check(
+      "training_level_rating_kind_chk",
+      sql`${t.kind} = 'LEVEL' OR (${t.minRating} IS NULL AND ${t.maxRating} IS NULL)`,
+    ),
+    check(
+      "training_level_band_chk",
+      sql`${t.kind} <> 'LEVEL' OR ${t.minRating} IS NOT NULL OR ${t.maxRating} IS NOT NULL`,
     ),
   ],
+);
+
+/** Roster for JUNIOR programmes: who may book its sessions. */
+export const levelMember = pgTable(
+  "level_member",
+  {
+    levelId: text("level_id")
+      .notNull()
+      .references(() => trainingLevel.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    addedById: text("added_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("level_member_uq").on(t.levelId, t.userId), index("level_member_user_idx").on(t.userId)],
 );
 
 export const trainingSession = pgTable(
@@ -488,5 +527,6 @@ export type User = typeof user.$inferSelect;
 export type DuprLink = typeof duprLink.$inferSelect;
 export type TrainingSession = typeof trainingSession.$inferSelect;
 export type TrainingLevel = typeof trainingLevel.$inferSelect;
+export type ProgramKind = (typeof programKindEnum.enumValues)[number];
 export type Booking = typeof booking.$inferSelect;
 export type AppSettings = typeof appSettings.$inferSelect;

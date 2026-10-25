@@ -47,7 +47,7 @@ describe("booking eligibility (server-enforced)", () => {
 
   it("rejects members without a linked/verified rating", async () => {
     const m = await makeUser();
-    const s = await makeSession({ minRating: null });
+    const s = await makeSession();
     await expect(bookSession(m, s.id)).rejects.toMatchObject({ code: "RATING_UNVERIFIED" });
   });
 

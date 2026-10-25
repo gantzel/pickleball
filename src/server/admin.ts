@@ -1,7 +1,7 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { appSettings, auditEvent, booking, duprLink, duprSyncLog, trainingLevel, user } from "@/db/schema";
+import { appSettings, auditEvent, booking, duprLink, duprSyncLog, levelMember, trainingLevel, user } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import type { Actor } from "./actor";
 import { requireAdmin } from "./actor";
@@ -14,31 +14,62 @@ import { getSettings } from "./settings";
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
 
+const optionalRating = z
+  .union([z.literal(""), z.coerce.number().min(1, "Rating skal være mindst 1").max(8.5, "Rating kan højst være 8,5")])
+  .optional()
+  .nullable()
+  .transform((v) => (v === "" || v === undefined || v === null ? null : Math.round(v * 1000) / 1000));
+
 const LevelInput = z
   .object({
     name: z.string().trim().min(2, "Navn skal være mindst 2 tegn").max(60),
     description: z.string().trim().max(300).optional().transform((v) => v || null),
-    minRating: z.coerce.number().min(1).max(8.5),
-    maxRating: z
-      .union([z.literal(""), z.coerce.number().min(1).max(8.5)])
+    kind: z.enum(["LEVEL", "JUNIOR", "SOCIAL", "EVENT"]).default("LEVEL"),
+    minRating: optionalRating,
+    maxRating: optionalRating,
+    allowUnrated: z
+      .union([z.boolean(), z.literal("on"), z.literal("true"), z.literal("")])
       .optional()
-      .transform((v) => (v === "" || v === undefined ? null : v)),
+      .transform((v) => v === true || v === "on" || v === "true"),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Farve skal være en hex-kode som #2f6b4f"),
     sortOrder: z.coerce.number().int().min(0).max(1000).default(0),
   })
-  .refine((v) => v.maxRating === null || v.maxRating > v.minRating, { message: "Maksimum skal være højere end minimum", path: ["maxRating"] });
+  .transform((v) =>
+    // Only rating levels have a band; other programmes ignore rating fields.
+    v.kind === "LEVEL" ? v : { ...v, minRating: null, maxRating: null, allowUnrated: false },
+  )
+  .refine((v) => v.kind !== "LEVEL" || v.minRating !== null || v.maxRating !== null, {
+    message: "Et ratingniveau skal have en nedre eller øvre grænse",
+    path: ["minRating"],
+  })
+  .refine((v) => v.maxRating === null || v.minRating === null || v.maxRating > v.minRating, {
+    message: "Øvre grænse skal være højere end nedre grænse",
+    path: ["maxRating"],
+  });
 
 function parseLevel(raw: unknown) {
   const p = LevelInput.safeParse(raw);
-  if (!p.success) throw new DomainError("VALIDATION", p.error.issues[0]?.message ?? "Ugyldigt niveau");
+  if (!p.success) throw new DomainError("VALIDATION", p.error.issues[0]?.message ?? "Ugyldigt hold");
   return p.data;
 }
 
-export const listLevels = () => db.select().from(trainingLevel).orderBy(asc(trainingLevel.minRating), asc(trainingLevel.sortOrder));
+/** Rating levels must not overlap: every rating maps to at most one level. */
+async function assertNoOverlap(v: { kind: string; minRating: number | null; maxRating: number | null }, id: string | null) {
+  if (v.kind !== "LEVEL") return;
+  const others = (await db.select().from(trainingLevel).where(eq(trainingLevel.kind, "LEVEL"))).filter((l) => l.id !== id);
+  const lo = (x: number | null) => (x === null ? -Infinity : x);
+  const hi = (x: number | null) => (x === null ? Infinity : x);
+  const clash = others.find((o) => lo(v.minRating) < hi(o.maxRating) && lo(o.minRating) < hi(v.maxRating));
+  if (clash) throw new DomainError("VALIDATION", `Ratinggrænserne overlapper med ${clash.name}.`);
+}
+
+export const listLevels = () =>
+  db.select().from(trainingLevel).orderBy(asc(trainingLevel.sortOrder), asc(trainingLevel.minRating), asc(trainingLevel.name));
 
 export async function saveLevel(actor: Actor, id: string | null, raw: unknown) {
   requireAdmin(actor);
   const v = parseLevel(raw);
+  await assertNoOverlap(v, id);
   const [row] = id
     ? await db.update(trainingLevel).set(v).where(eq(trainingLevel.id, id)).returning()
     : await db.insert(trainingLevel).values(v).returning();
@@ -51,6 +82,84 @@ export async function deleteLevel(actor: Actor, id: string) {
   requireAdmin(actor);
   await db.delete(trainingLevel).where(eq(trainingLevel.id, id));
   await audit(db, { actorId: actor.id, action: "level.delete", targetType: "level", targetId: id });
+}
+
+/** The club's standard structure (Pickleball København, Oct 2026). */
+export const STANDARD_STRUCTURE = [
+  { name: "Level 1 – Foundation", kind: "LEVEL", minRating: null, maxRating: 3.0, allowUnrated: true, color: "#3a7d5c", description: "Grundteknik og udvikling. For DUPR under 3.0 — også nye spillere med koblet DUPR-profil, der endnu ikke har en rating." },
+  { name: "Level 2 – Development", kind: "LEVEL", minRating: 3.0, maxRating: 3.5, allowUnrated: false, color: "#2f6b8f", description: "Teknik, taktik og stabilitet. For DUPR 3.0–3.49." },
+  { name: "Level 3 – Performance", kind: "LEVEL", minRating: 3.5, maxRating: 4.0, allowUnrated: false, color: "#7a4fa3", description: "Avanceret taktik og konkurrenceforberedelse. For DUPR 3.5–3.99." },
+  { name: "Kamphold – Competition", kind: "LEVEL", minRating: 4.0, maxRating: null, allowUnrated: false, color: "#b5462f", description: "Målrettet træning for spillere på højt niveau. For DUPR 4.0+." },
+  { name: "Børnehold – Junior Pickleball", kind: "JUNIOR", minRating: null, maxRating: null, allowUnrated: false, color: "#d08a1e", description: "Børnetræning og spilleglæde. Adgang efter alder og færdigheder via holdets deltagerliste." },
+  { name: "Social Play", kind: "SOCIAL", minRating: null, maxRating: null, allowUnrated: false, color: "#4f7f3a", description: "Motion, kampe og fællesskab. Åbent for alle." },
+  { name: "DUPR-events – Rated Play", kind: "EVENT", minRating: null, maxRating: null, allowUnrated: false, color: "#1f4e5f", description: "Kampe, der registreres i DUPR. Hvert event har sine egne ratingkrav." },
+] as const;
+
+/** Creates the standard structure. Only allowed while the club has no programmes. */
+export async function applyStandardStructure(actor: Actor) {
+  requireAdmin(actor);
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`LOCK TABLE training_level IN EXCLUSIVE MODE`);
+    const [{ n }] = await tx.select({ n: count() }).from(trainingLevel);
+    if (Number(n) > 0) throw new DomainError("CONFLICT", "Der findes allerede hold. Ret dem enkeltvis i stedet.");
+    const rows = await tx
+      .insert(trainingLevel)
+      .values(STANDARD_STRUCTURE.map((l, i) => ({ ...l, sortOrder: (i + 1) * 10 })))
+      .returning({ id: trainingLevel.id });
+    await audit(tx, { actorId: actor.id, action: "level.standard_structure", targetType: "level", targetId: "*", metadata: { created: rows.length } });
+    return rows.length;
+  });
+}
+
+// ─── Junior rosters ──────────────────────────────────────────────────────────
+
+async function requireRosterLevel(levelId: string) {
+  const [l] = await db.select().from(trainingLevel).where(eq(trainingLevel.id, levelId));
+  if (!l) throw new DomainError("NOT_FOUND", "Holdet findes ikke.");
+  if (l.kind !== "JUNIOR") throw new DomainError("CONFLICT", "Kun hold med deltagerliste har deltagere.");
+  return l;
+}
+
+export async function listRoster(actor: Actor, levelId: string) {
+  requireAdmin(actor);
+  return db
+    .select({ userId: user.id, name: user.name, email: user.email, addedAt: levelMember.createdAt })
+    .from(levelMember)
+    .innerJoin(user, eq(user.id, levelMember.userId))
+    .where(and(eq(levelMember.levelId, levelId), isNull(user.deletedAt)))
+    .orderBy(asc(user.name));
+}
+
+export async function addToRoster(actor: Actor, levelId: string, email: string) {
+  requireAdmin(actor);
+  const level = await requireRosterLevel(levelId);
+  const [u] = await db
+    .select({ id: user.id, name: user.name })
+    .from(user)
+    .where(and(sql`lower(${user.email}) = ${email.trim().toLowerCase()}`, isNull(user.deletedAt)));
+  if (!u) throw new DomainError("NOT_FOUND", "Der findes intet medlem med den e-mail.");
+  const effects = new Effects();
+  await db.transaction(async (tx) => {
+    const inserted = await tx.insert(levelMember).values({ levelId, userId: u.id, addedById: actor.id }).onConflictDoNothing().returning();
+    if (!inserted.length) return;
+    await notify(tx, effects, u.id, {
+      type: "ROSTER_ADDED",
+      title: `Du er på holdet: ${level.name}`,
+      body: `Du kan nu tilmelde dig træninger på ${level.name}.`,
+      link: "/traeninger",
+    });
+    await audit(tx, { actorId: actor.id, action: "roster.add", targetType: "level", targetId: levelId, metadata: { userId: u.id } });
+  });
+  await effects.flush();
+  return u;
+}
+
+/** Removing someone from a roster never cancels existing bookings; admins handle those. */
+export async function removeFromRoster(actor: Actor, levelId: string, userId: string) {
+  requireAdmin(actor);
+  await requireRosterLevel(levelId);
+  await db.delete(levelMember).where(and(eq(levelMember.levelId, levelId), eq(levelMember.userId, userId)));
+  await audit(db, { actorId: actor.id, action: "roster.remove", targetType: "level", targetId: levelId, metadata: { userId } });
 }
 
 // ─── Settings ────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
-import { duprLink, mockDuprPlayer, trainingSession, user } from "@/db/schema";
+import { duprLink, mockDuprPlayer, trainingLevel, trainingSession, user } from "@/db/schema";
 import type { Actor } from "@/server/actor";
 import { completeLink, startLink } from "@/server/dupr/link";
 
@@ -44,10 +44,20 @@ export async function makeSession(opts: Partial<typeof trainingSession.$inferIns
       locationName: "Testhallen",
       capacity: 4,
       status: "PUBLISHED",
+      // Rating-gated by default (any verified rating); pass minRating: null for an open session.
+      minRating: 1.0,
       ...opts,
     })
     .returning();
   return s;
+}
+
+export async function makeLevel(opts: Partial<typeof trainingLevel.$inferInsert> = {}) {
+  const [l] = await db
+    .insert(trainingLevel)
+    .values({ name: `Hold ${++n}`, kind: "LEVEL", minRating: 3.0, maxRating: 3.5, ...opts })
+    .returning();
+  return l;
 }
 
 export async function getLink(userId: string) {

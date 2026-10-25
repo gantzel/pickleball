@@ -6,14 +6,14 @@
  *
  * Waitlist rule (README → "Waitlist"):
  *  When a place frees up, it is offered to the earliest-joined waitlisted
- *  member who is *currently* eligible (verified rating within range). The
+ *  member who is *currently* eligible under the session's access rule. The
  *  place is held for `offerWindowHours` or until booking closes, whichever is
  *  sooner. Ineligible members keep their queue position and are skipped.
  *  Unaccepted offers expire and the place moves on to the next in line.
  */
 import { and, asc, count, eq, gt, inArray, lte, or } from "drizzle-orm";
 import { db, type Tx } from "@/db";
-import { booking, duprLink, trainingSession, type AppSettings, type TrainingSession } from "@/db/schema";
+import { booking, duprLink, levelMember, trainingLevel, trainingSession, type AppSettings, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatRating, formatTime } from "@/lib/format";
 import type { Actor } from "./actor";
@@ -23,9 +23,11 @@ import { evaluateAttendanceAchievements } from "./achievements";
 import { isProviderActive } from "./dupr/provider";
 import { Effects } from "./effects";
 import {
+  accessRule,
   bookingClosesAt,
   computeRatingState,
-  ratingEligibility,
+  ruleEligibility,
+  type AccessRule,
   type RatingState,
 } from "./eligibility";
 import { notify } from "./notify";
@@ -70,17 +72,47 @@ function assertBookable(s: Session, now: Date) {
   if (now >= bookingClosesAt(s)) throw new DomainError("BOOKING_WINDOW", "Bookingen er lukket.");
 }
 
-function assertRatingEligible(s: Session, state: RatingState) {
-  const r = ratingEligibility(s, state);
-  if (r.code === "ELIGIBLE") return;
-  if (r.code === "VERIFY_NEEDED") {
-    throw new DomainError("RATING_UNVERIFIED", "Din DUPR-rating skal være verificeret og opdateret, før du kan booke.");
-  }
-  if (r.code === "LOCKED_LOW") {
-    throw new DomainError("NOT_ELIGIBLE", `Træningen kræver en rating på mindst ${formatRating(r.min)}.`);
-  }
-  if (r.code === "LOCKED_HIGH") {
-    throw new DomainError("NOT_ELIGIBLE", `Træningen er for ratings op til ${formatRating(r.max)}.`);
+/** The session's access rule, derived from its programme. */
+export async function sessionRule(tx: Tx, s: Pick<Session, "levelId" | "minRating" | "maxRating">): Promise<AccessRule> {
+  if (!s.levelId) return accessRule(s, null);
+  const [level] = await tx.select().from(trainingLevel).where(eq(trainingLevel.id, s.levelId));
+  return accessRule(s, level ?? null);
+}
+
+export async function isOnRoster(tx: Tx, levelId: string | null, userId: string) {
+  if (!levelId) return false;
+  const [r] = await tx
+    .select({ u: levelMember.userId })
+    .from(levelMember)
+    .where(and(eq(levelMember.levelId, levelId), eq(levelMember.userId, userId)));
+  return !!r;
+}
+
+/** Full eligibility check for one member against one session. */
+export async function memberEligibility(tx: Tx, s: Session, rule: AccessRule, userId: string, settings: AppSettings, now: Date) {
+  const state = await loadRatingState(tx, userId, settings, now);
+  const onRoster = rule.kind === "ROSTER" ? await isOnRoster(tx, s.levelId, userId) : false;
+  return ruleEligibility(rule, state, onRoster);
+}
+
+async function assertEligible(tx: Tx, s: Session, userId: string, settings: AppSettings, now: Date) {
+  const r = await memberEligibility(tx, s, await sessionRule(tx, s), userId, settings, now);
+  switch (r.code) {
+    case "ELIGIBLE":
+      return;
+    case "VERIFY_NEEDED":
+      throw new DomainError("RATING_UNVERIFIED", "Din DUPR-rating skal være verificeret og opdateret, før du kan booke.");
+    case "LOCKED_LOW":
+      throw new DomainError("NOT_ELIGIBLE", `Træningen kræver en rating på mindst ${formatRating(r.min)}.`);
+    case "LOCKED_HIGH":
+      throw new DomainError(
+        "NOT_ELIGIBLE",
+        r.exclusive ? `Træningen er for ratings under ${formatRating(r.max)}.` : `Træningen er for ratings op til ${formatRating(r.max)}.`,
+      );
+    case "NOT_ON_ROSTER":
+      throw new DomainError("NOT_ELIGIBLE", "Holdet har en deltagerliste. Kontakt træneren for at komme på holdet.");
+    case "DUPR_NEEDED":
+      throw new DomainError("RATING_UNVERIFIED", "Eventet kræver, at din DUPR-profil er koblet til.");
   }
 }
 
@@ -141,17 +173,19 @@ export async function offerFreedPlacesLocked(tx: Tx, s: Session, effects: Effect
   if (free <= 0) return;
 
   const cfg = settings ?? (await getSettings(tx));
+  const rule = await sessionRule(tx, s);
   const queue = await tx
-    .select({ b: booking, link: duprLink })
+    .select({ b: booking, link: duprLink, rostered: levelMember.userId })
     .from(booking)
     .leftJoin(duprLink, eq(duprLink.userId, booking.userId))
+    .leftJoin(levelMember, and(eq(levelMember.userId, booking.userId), eq(levelMember.levelId, s.levelId ?? "")))
     .where(and(eq(booking.sessionId, s.id), eq(booking.status, "WAITLISTED")))
     .orderBy(asc(booking.waitlistedAt), asc(booking.createdAt));
 
-  for (const { b, link } of queue) {
+  for (const { b, link, rostered } of queue) {
     if (free <= 0) break;
     const state = computeRatingState(link, cfg, now, isProviderActive);
-    if (ratingEligibility(s, state).code !== "ELIGIBLE") continue; // keeps queue position
+    if (ruleEligibility(rule, state, !!rostered).code !== "ELIGIBLE") continue; // keeps queue position
     const expiresAt = new Date(Math.min(now.getTime() + cfg.offerWindowHours * 3600_000, closes.getTime()));
     await tx
       .update(booking)
@@ -189,7 +223,7 @@ export async function bookSession(actor: Actor, sessionId: string) {
     }
 
     const settings = await getSettings(tx);
-    assertRatingEligible(s, await loadRatingState(tx, actor.id, settings, now));
+    await assertEligible(tx, s, actor.id, settings, now);
 
     if ((await heldCount(tx, s.id, now)) >= s.capacity) {
       throw new DomainError("SESSION_FULL", "Træningen er fuld. Du kan skrive dig på ventelisten.");
@@ -229,7 +263,7 @@ export async function joinWaitlist(actor: Actor, sessionId: string) {
       throw new DomainError("CONFLICT", "Du er allerede tilmeldt denne træning eller dens venteliste.");
     }
     const settings = await getSettings(tx);
-    assertRatingEligible(s, await loadRatingState(tx, actor.id, settings, now));
+    await assertEligible(tx, s, actor.id, settings, now);
     if ((await heldCount(tx, s.id, now)) < s.capacity) {
       throw new DomainError("CONFLICT", "Der er stadig ledige pladser — book direkte i stedet.");
     }
@@ -275,7 +309,7 @@ export async function acceptOffer(actor: Actor, sessionId: string) {
     }
     if (s.status !== "PUBLISHED" || s.startsAt <= now) throw new DomainError("BOOKING_WINDOW", "Træningen kan ikke længere bookes.");
     const settings = await getSettings(tx);
-    assertRatingEligible(s, await loadRatingState(tx, actor.id, settings, now));
+    await assertEligible(tx, s, actor.id, settings, now);
     await tx
       .update(booking)
       .set({ status: "CONFIRMED", confirmedAt: now, offerExpiresAt: null })

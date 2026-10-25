@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { BookingActions } from "@/components/booking-actions";
 import { StatusChip } from "@/components/status-chip";
 import { isDomainError } from "@/lib/errors";
-import { formatDate, formatDateTime, formatRating, formatRatingRange, formatTimeRange, pluralPlaces } from "@/lib/format";
+import { formatBand, formatDate, formatDateTime, formatRating, formatTimeRange, pluralPlaces, ruleRangeLabel } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
 import { getSessionForMember } from "@/server/sessions";
 import { getSettings } from "@/server/settings";
@@ -24,10 +24,12 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const fill = Math.min(100, (v.held / s.capacity) * 100);
 
   const explanation: Record<string, string> = {
-    AVAILABLE: "Din verificerede rating opfylder kravet, og der er ledige pladser.",
+    AVAILABLE: v.rule.kind === "RATING" ? "Din verificerede rating opfylder kravet, og der er ledige pladser." : "Du kan tilmelde dig, og der er ledige pladser.",
     FULL_WAITLIST: "Du opfylder kravet, men træningen er fuld. Skriv dig på ventelisten, så tilbyder vi dig en plads, hvis en bliver ledig.",
     LOCKED_LOW: a.code === "LOCKED_LOW" ? `Træningen kræver mindst ${formatRating(a.min)}. Din rating er ${formatRating(a.rating)}, så du mangler ${formatRating(a.min - a.rating)}.` : "",
-    LOCKED_HIGH: a.code === "LOCKED_HIGH" ? `Træningen er for ratings ${formatRatingRange(a.min, a.max)}. Din rating er ${formatRating(a.rating)}, så der er andre træninger, der passer bedre til dig.` : "",
+    LOCKED_HIGH: a.code === "LOCKED_HIGH" ? `Træningen er for ratings ${formatBand(a.min, a.max, a.exclusive)}. Din rating er ${formatRating(a.rating)}, så din adgang er flyttet til et højere niveau.` : "",
+    NOT_ON_ROSTER: "Holdet har en fast deltagerliste efter alder og færdigheder. Kontakt træneren, hvis du (eller dit barn) skal på holdet.",
+    DUPR_NEEDED: "Kampene registreres i DUPR, så du skal have koblet din DUPR-profil til for at tilmelde dig.",
     VERIFY_NEEDED: "Du skal have en verificeret og opdateret DUPR-rating for at booke. Kobl eller synkronisér DUPR på din profil.",
     BOOKED: a.code === "BOOKED" && a.flagged ? "Du er booket. Din rating ligger nu uden for træningens niveau; din plads er bevaret, og træneren er orienteret." : "Du er booket. Vi ses på banen!",
     OFFERED: a.code === "OFFERED" ? `En plads er blevet ledig til dig. Accepter senest ${formatDateTime(a.expiresAt)}, ellers går den videre.` : "",
@@ -90,8 +92,8 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
           )}
         </div>
         <div className="panel p-4">
-          <dt className="text-sm text-muted">Ratingkrav ({settings.ratingType === "DOUBLES" ? "double" : "single"})</dt>
-          <dd className="num text-lg font-semibold">{formatRatingRange(s.minRating, s.maxRating)}</dd>
+          <dt className="text-sm text-muted">{v.rule.kind === "RATING" ? `Ratingkrav (${settings.ratingType === "DOUBLES" ? "double" : "single"})` : "Adgang"}</dt>
+          <dd className="num text-lg font-semibold">{ruleRangeLabel(v.rule)}</dd>
         </div>
         <div className="panel p-4">
           <dt className="text-sm text-muted">Booking</dt>

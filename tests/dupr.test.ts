@@ -176,7 +176,7 @@ describe("stale, missing and failed syncs", () => {
     const m = await makeUser();
     const { outcome } = await linkWithRating(m, null);
     expect(outcome.result).toBe("NO_RATING");
-    const s = await makeSession({ minRating: null });
+    const s = await makeSession();
     expect((await getSessionForMember(m, s.id)).availability).toEqual({ code: "VERIFY_NEEDED", reason: "NO_RATING" });
   });
 

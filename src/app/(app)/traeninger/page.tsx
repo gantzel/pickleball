@@ -12,7 +12,7 @@ const FILTERS = [
   { key: "alle", label: "Alle", test: () => true },
   { key: "kan-bookes", label: "Kan bookes", test: (v: MemberSessionView) => ["AVAILABLE", "FULL_WAITLIST", "OFFERED"].includes(v.availability.code) },
   { key: "mine", label: "Mine", test: (v: MemberSessionView) => ["BOOKED", "WAITLISTED", "OFFERED"].includes(v.availability.code) },
-  { key: "laast", label: "Låst", test: (v: MemberSessionView) => ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED"].includes(v.availability.code) },
+  { key: "laast", label: "Låst", test: (v: MemberSessionView) => ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED", "NOT_ON_ROSTER", "DUPR_NEEDED"].includes(v.availability.code) },
 ] as const;
 
 const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen", year: "numeric", month: "2-digit", day: "2-digit" });

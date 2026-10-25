@@ -17,7 +17,7 @@ export default async function NewSession() {
     <div className="max-w-3xl">
       <PageHeader title="Ny træning" />
       <div className="panel p-5 sm:p-6">
-        <SessionForm isDraft values={{ startsAt: toLocalInput(start), endsAt: toLocalInput(end), capacity: 16 }} levels={levels.map((l) => ({ id: l.id, name: l.name, minRating: l.minRating, maxRating: l.maxRating }))} />
+        <SessionForm isDraft values={{ startsAt: toLocalInput(start), endsAt: toLocalInput(end), capacity: 16 }} levels={levels.map((l) => ({ id: l.id, name: l.name, kind: l.kind, minRating: l.minRating, maxRating: l.maxRating }))} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatRatingRange, formatTimeRange, pluralPlaces } from "@/lib/format";
+import { formatTimeRange, pluralPlaces, ruleRangeLabel } from "@/lib/format";
 import type { MemberSessionView } from "@/server/sessions";
 import { BookingActions } from "./booking-actions";
 import { StatusChip } from "./status-chip";
@@ -10,9 +10,11 @@ const wdFmt = new Intl.DateTimeFormat("da-DK", { weekday: "short", timeZone: "Eu
 
 function explain(v: MemberSessionView): string | null {
   const a = v.availability;
-  if (a.code === "LOCKED_LOW") return "Låses op, når din verificerede rating når grænsen.";
-  if (a.code === "LOCKED_HIGH") return "Din rating ligger over træningens niveau.";
+  if (a.code === "LOCKED_LOW") return "Åbner automatisk, når din verificerede rating når grænsen.";
+  if (a.code === "LOCKED_HIGH") return "Din rating er over holdets niveau — se træningerne på dit nye niveau.";
   if (a.code === "VERIFY_NEEDED") return "Kobl eller synkronisér DUPR på din profil.";
+  if (a.code === "DUPR_NEEDED") return "Kobl din DUPR-profil til, så dine kampe kan registreres.";
+  if (a.code === "NOT_ON_ROSTER") return "Holdet har en fast deltagerliste. Kontakt træneren.";
   if (a.code === "OFFERED") return "Accepter inden fristen, ellers går pladsen videre.";
   return null;
 }
@@ -46,7 +48,7 @@ export function SessionRow({ v, showActions = true }: { v: MemberSessionView; sh
             {formatTimeRange(s.startsAt, s.endsAt)}, {s.locationName}
           </p>
           <p className="text-sm text-muted">
-            Rating {formatRatingRange(s.minRating, s.maxRating)}
+            {v.rule.kind === "RATING" ? `Rating ${ruleRangeLabel(v.rule)}` : ruleRangeLabel(v.rule)}
             {a.code !== "CANCELLED" && a.code !== "PAST" && (
               <>
                 {", "}

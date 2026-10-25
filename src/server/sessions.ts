@@ -2,16 +2,16 @@ import { fromZonedTime } from "date-fns-tz";
 import { and, asc, count, desc, eq, gte, inArray, lt, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import { booking, duprLink, trainingLevel, trainingSession, user, type TrainingSession } from "@/db/schema";
+import { booking, duprLink, levelMember, trainingLevel, trainingSession, user, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import { CLUB_TZ, formatDate, formatTime } from "@/lib/format";
 import type { Actor } from "./actor";
 import { requireActor, requireAdmin } from "./actor";
 import { audit } from "./audit";
-import { lockSession, loadRatingState, offerFreedPlacesLocked, withSessionLock } from "./bookings";
+import { lockSession, loadRatingState, offerFreedPlacesLocked, sessionRule, withSessionLock } from "./bookings";
 import { isProviderActive } from "./dupr/provider";
 import { Effects } from "./effects";
-import { computeAvailability, computeRatingState, inSessionRange, isActiveOffer, type Availability } from "./eligibility";
+import { accessRule, computeAvailability, computeRatingState, isActiveOffer, ratingFitsRule, type AccessRule, type Availability } from "./eligibility";
 import { notify } from "./notify";
 import { getSettings } from "./settings";
 
@@ -80,11 +80,24 @@ export function parseSessionInput(raw: unknown) {
   return parsed.data;
 }
 
+/**
+ * Rating levels and junior programmes define access themselves, so their
+ * sessions carry no limits of their own (the level's band always applies,
+ * also when an admin later adjusts it).
+ */
+async function normaliseLimits<T extends { levelId: string | null; minRating: number | null; maxRating: number | null }>(input: T): Promise<T> {
+  if (!input.levelId) return input;
+  const [level] = await db.select({ kind: trainingLevel.kind }).from(trainingLevel).where(eq(trainingLevel.id, input.levelId));
+  if (!level) throw new DomainError("VALIDATION", "Holdet findes ikke.", { fields: { levelId: "Holdet findes ikke" } });
+  if (level.kind === "LEVEL" || level.kind === "JUNIOR") return { ...input, minRating: null, maxRating: null };
+  return input;
+}
+
 // ─── Admin mutations ─────────────────────────────────────────────────────────
 
 export async function createSession(actor: Actor, raw: unknown) {
   requireAdmin(actor);
-  const input = parseSessionInput(raw);
+  const input = await normaliseLimits(parseSessionInput(raw));
   const [s] = await db.insert(trainingSession).values({ ...input, status: "DRAFT", createdById: actor.id }).returning();
   await audit(db, { actorId: actor.id, action: "session.create", targetType: "session", targetId: s.id, metadata: { title: s.title } });
   return s;
@@ -92,7 +105,7 @@ export async function createSession(actor: Actor, raw: unknown) {
 
 export async function updateSession(actor: Actor, id: string, raw: unknown) {
   requireAdmin(actor);
-  const input = parseSessionInput(raw);
+  const input = await normaliseLimits(parseSessionInput(raw));
   return withSessionLock(id, async (tx, s, effects, now) => {
     if (s.status === "CANCELLED" || s.status === "COMPLETED") {
       throw new DomainError("CONFLICT", "Aflyste eller afsluttede træninger kan ikke redigeres.");
@@ -106,10 +119,11 @@ export async function updateSession(actor: Actor, id: string, raw: unknown) {
     }
     const [updated] = await tx.update(trainingSession).set(input).where(eq(trainingSession.id, id)).returning();
 
-    // Rating range changed: flag (never cancel) confirmed bookings now outside it.
+    // Access changed: flag (never cancel) confirmed bookings now outside the rating band.
     let flagged = 0;
-    if (updated.minRating !== s.minRating || updated.maxRating !== s.maxRating) {
+    if (updated.minRating !== s.minRating || updated.maxRating !== s.maxRating || updated.levelId !== s.levelId) {
       const settings = await getSettings(tx);
+      const rule = await sessionRule(tx, updated);
       const rows = await tx
         .select({ b: booking, link: duprLink })
         .from(booking)
@@ -117,7 +131,7 @@ export async function updateSession(actor: Actor, id: string, raw: unknown) {
         .where(and(eq(booking.sessionId, id), eq(booking.status, "CONFIRMED")));
       for (const { b, link } of rows) {
         const st = computeRatingState(link, settings, now, isProviderActive);
-        const out = st.kind === "VERIFIED" && !inSessionRange(st.rating, updated.minRating, updated.maxRating);
+        const out = st.kind === "VERIFIED" && !ratingFitsRule(rule, st.rating);
         if (out && b.flag === "NONE") {
           await tx.update(booking).set({ flag: "RATING_OUT_OF_RANGE", flaggedAt: now }).where(eq(booking.id, b.id));
           flagged++;
@@ -225,6 +239,8 @@ export interface MemberSessionView {
   session: TrainingSession;
   levelName: string | null;
   levelColor: string | null;
+  levelKind: string | null;
+  rule: AccessRule;
   held: number;
   remaining: number;
   waitlistCount: number;
@@ -238,6 +254,9 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
   const ratingState = await loadRatingState(db, actor.id, settings, now);
   const levels = await db.select().from(trainingLevel);
   const levelById = new Map(levels.map((l) => [l.id, l]));
+  const roster = new Set(
+    (await db.select({ levelId: levelMember.levelId }).from(levelMember).where(eq(levelMember.userId, actor.id))).map((r) => r.levelId),
+  );
   const rows = await db
     .select({ sessionId: booking.sessionId, userId: booking.userId, status: booking.status, offerExpiresAt: booking.offerExpiresAt, flag: booking.flag, waitlistedAt: booking.waitlistedAt, createdAt: booking.createdAt })
     .from(booking)
@@ -251,14 +270,26 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
     const own = mine.find((r) => r.userId === actor.id) ?? null;
     const position = own?.status === "WAITLISTED" ? waitlist.findIndex((w) => w.userId === actor.id) + 1 : undefined;
     const level = s.levelId ? levelById.get(s.levelId) : undefined;
+    const rule = accessRule(s, level ?? null);
     return {
       session: s,
       levelName: level?.name ?? null,
       levelColor: level?.color ?? null,
+      levelKind: level?.kind ?? null,
+      rule,
       held,
       remaining: Math.max(0, s.capacity - held),
       waitlistCount: waitlist.length,
-      availability: computeAvailability({ session: s, heldCount: held, booking: own, waitlistPosition: position, ratingState, now }),
+      availability: computeAvailability({
+        session: s,
+        heldCount: held,
+        booking: own,
+        waitlistPosition: position,
+        ratingState,
+        rule,
+        onRoster: !!s.levelId && roster.has(s.levelId),
+        now,
+      }),
     };
   });
 }

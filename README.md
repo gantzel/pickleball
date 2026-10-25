@@ -71,12 +71,27 @@ See [.env.example](.env.example) (placeholders only). Key ones:
 
 All admin-configurable under **Admin → Regler**; changes are audited.
 
+**Club structure (programmes / "hold")**
+Every session belongs to a programme, and the programme decides who may book:
+
+| Programme | Type | Access |
+| --- | --- | --- |
+| Level 1 – Foundation | rating level | DUPR under 3.0 (also linked players without a rating yet) |
+| Level 2 – Development | rating level | 3.000 – under 3.500 |
+| Level 3 – Performance | rating level | 3.500 – under 4.000 |
+| Kamphold – Competition | rating level | 4.000+ |
+| Børnehold – Junior Pickleball | roster | members an admin has put on the roster |
+| Social Play | open | every member, no DUPR needed (a session may set its own limits) |
+| DUPR-events – Rated Play | event | linked DUPR profile + the event's own limits (inclusive) |
+
+Rating levels are half-open `[min, max)` and may not overlap, so every rating maps to exactly one level. Sessions on a rating level take the level's band (never their own limits), so adjusting a band applies to all its sessions at once, and members move between levels automatically as their DUPR rating changes — no manual assessment. Admin → Hold creates this structure with one click ("Opret klubbens hold") and edits it. Training sessions don't record results or affect ratings.
+
 **Eligibility policy**
 - Only ratings from the *active* provider count. Mock ratings never count in production.
 - A rating is *verified* if the last successful sync is within `staleAfterDays` (default 14). A failed sync inside that window keeps the rating usable, with a warning. After it, the rating is *stale* → "Rating skal verificeres" → cannot book.
-- Not linked, no DUPR rating yet, revoked access, or integration unavailable → cannot book.
+- For rating-based access: not linked, no DUPR rating yet (except levels that allow unrated beginners), revoked access, or integration unavailable → cannot book.
 - Doubles rating by default (switchable to singles).
-- Session limits are inclusive (`min ≤ rating ≤ max`). Training levels are half-open `[min, max)` so they never overlap.
+- Per-session limits (social, events, sessions without a programme) are inclusive (`min ≤ rating ≤ max`). Sessions without a programme and without limits are open to all members.
 - Eligibility is computed from the current verified rating on every read and every booking attempt, so a rating change takes effect immediately.
 
 **Booking & capacity**

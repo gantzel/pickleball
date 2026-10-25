@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { deleteLevel, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
+import { addToRoster, applyStandardStructure, deleteLevel, removeFromRoster, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -69,14 +69,37 @@ export async function bookingAdminAction(bookingId: string, command: "cancel" | 
 export async function saveLevelAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const actor = toActor(await requireAdminUser());
   const id = String(form.get("id") ?? "") || null;
-  const res = await toActionResult(() => saveLevel(actor, id, formToObject(form, ["name", "description", "minRating", "maxRating", "color", "sortOrder"])), "Niveauet er gemt.");
+  const res = await toActionResult(() => saveLevel(actor, id, formToObject(form, ["name", "description", "kind", "minRating", "maxRating", "allowUnrated", "color", "sortOrder"])), "Holdet er gemt.");
   refreshAdmin();
   return res as ActionResult;
 }
 
 export async function deleteLevelAction(id: string): Promise<ActionResult> {
   const actor = toActor(await requireAdminUser());
-  const res = await toActionResult(() => deleteLevel(actor, id), "Niveauet er slettet.");
+  const res = await toActionResult(() => deleteLevel(actor, id), "Holdet er slettet.");
+  refreshAdmin();
+  return res;
+}
+
+export async function applyStandardStructureAction(): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(() => applyStandardStructure(actor), "Klubbens hold er oprettet.");
+  refreshAdmin();
+  return res as ActionResult;
+}
+
+export async function addToRosterAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const levelId = String(form.get("levelId") ?? "");
+  const email = String(form.get("email") ?? "");
+  const res = await toActionResult(async () => (await addToRoster(actor, levelId, email)).name, "Medlemmet er tilføjet holdet.");
+  refreshAdmin();
+  return res as ActionResult;
+}
+
+export async function removeFromRosterAction(levelId: string, userId: string): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(() => removeFromRoster(actor, levelId, userId), "Medlemmet er fjernet fra holdet.");
   refreshAdmin();
   return res;
 }

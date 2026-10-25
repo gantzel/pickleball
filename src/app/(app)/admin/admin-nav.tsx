@@ -7,7 +7,7 @@ const ITEMS = [
   { href: "/admin/traeninger", label: "Træninger" },
   { href: "/admin/medlemmer", label: "Medlemmer" },
   { href: "/admin/synk", label: "DUPR-synk" },
-  { href: "/admin/niveauer", label: "Niveauer" },
+  { href: "/admin/niveauer", label: "Hold" },
   { href: "/admin/indstillinger", label: "Regler" },
   { href: "/admin/log", label: "Log" },
 ];

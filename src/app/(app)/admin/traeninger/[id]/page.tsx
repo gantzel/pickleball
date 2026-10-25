@@ -97,7 +97,7 @@ export default async function AdminSession({ params, searchParams }: { params: P
           <h2 id="edit-h" className="mb-4 text-xl font-bold">Redigér</h2>
           <SessionForm
             isDraft={s.status === "DRAFT"}
-            levels={levels.map((l) => ({ id: l.id, name: l.name, minRating: l.minRating, maxRating: l.maxRating }))}
+            levels={levels.map((l) => ({ id: l.id, name: l.name, kind: l.kind, minRating: l.minRating, maxRating: l.maxRating }))}
             values={{
               id: s.id,
               title: s.title,

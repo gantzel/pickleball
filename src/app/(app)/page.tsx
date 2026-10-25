@@ -24,7 +24,7 @@ export default async function Dashboard() {
   const full = views.filter((v) => v.availability.code === "FULL_WAITLIST");
   const lockedCount = views.filter((v) => v.availability.code === "LOCKED_LOW").length;
   const rating = progress.ratingState.kind === "VERIFIED" ? progress.ratingState.rating : null;
-  const lockedLevels = rating === null ? progress.levels : progress.levels.filter((l) => l.minRating > rating);
+  const lockedLevels = rating === null ? progress.levels : progress.levels.filter((l) => l.minRating !== null && l.minRating > rating);
   const firstName = user.name.split(" ")[0];
   const past = history.filter((h) => h.s.startsAt < new Date()).slice(0, 5);
 
@@ -126,7 +126,7 @@ export default async function Dashboard() {
                     </span>
                     <span className="text-right text-sm">
                       <span className="num font-semibold">{formatRating(l.minRating)}</span>
-                      {rating !== null && <span className="block text-muted">+{formatRating(l.minRating - rating)}</span>}
+                      {rating !== null && <span className="block text-muted">+{formatRating((l.minRating ?? 0) - rating)}</span>}
                     </span>
                   </li>
                 ))}
