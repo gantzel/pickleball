@@ -28,7 +28,7 @@ Any other S3-compatible store works the same way (AWS S3: leave `S3_ENDPOINT` em
 
 1. Create a Brevo account and **authenticate your domain** (Brevo shows DNS records to add at your domain host) so mail isn't flagged as spam.
 2. Under SMTP & API, create an SMTP key. Brevo shows an SMTP login (an email-like address).
-3. Variables: `SMTP_URL=smtp://<login>:<smtp-key>@smtp-relay.brevo.com:587` (replace `@` inside the login with `%40`), `MAIL_FROM="Pickleball København <traening@yourdomain.dk>"` using an address on the authenticated domain.
+3. Variables: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<the SMTP login>`, `SMTP_PASS=<the SMTP key>` (mark it Secret), and `MAIL_FROM="Pickleball København <admin@yourdomain.dk>"` using a sender added and verified in Brevo on the authenticated domain. (A single `SMTP_URL` also works; URL-encode `@` in the login as `%40`.)
 
 ## 4. App — Vercel
 

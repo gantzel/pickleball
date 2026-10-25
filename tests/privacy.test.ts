@@ -57,3 +57,14 @@ describe("retention", () => {
     expect((await db.select().from(auditEvent)).map((a) => a.action)).toEqual(["new"]);
   });
 });
+
+describe("smtp config", () => {
+  it("accepts a URL or separate fields, and nothing when incomplete", async () => {
+    const { smtpConfig } = await import("@/server/mailer");
+    expect(smtpConfig({ SMTP_URL: "smtp://a:b@h:587" })).toBe("smtp://a:b@h:587");
+    expect(smtpConfig({ SMTP_HOST: "smtp-relay.brevo.com", SMTP_PORT: 587, SMTP_USER: "x@smtp-brevo.com", SMTP_PASS: "k" })).toEqual({
+      host: "smtp-relay.brevo.com", port: 587, secure: false, auth: { user: "x@smtp-brevo.com", pass: "k" },
+    });
+    expect(smtpConfig({ SMTP_HOST: "h", SMTP_USER: "u" })).toBeNull();
+  });
+});

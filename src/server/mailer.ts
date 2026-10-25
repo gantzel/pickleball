@@ -12,10 +12,24 @@ export interface Mail {
 
 let transporter: Transporter | null | undefined;
 
+/**
+ * SMTP is configured either as one URL (SMTP_URL) or as separate fields
+ * (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) — the latter avoids having to
+ * URL-encode a login that contains "@".
+ */
+export function smtpConfig(e: Pick<ReturnType<typeof env>, "SMTP_URL" | "SMTP_HOST" | "SMTP_PORT" | "SMTP_USER" | "SMTP_PASS">) {
+  if (e.SMTP_URL) return e.SMTP_URL;
+  if (e.SMTP_HOST && e.SMTP_USER && e.SMTP_PASS) {
+    const port = e.SMTP_PORT ?? 587;
+    return { host: e.SMTP_HOST, port, secure: port === 465, auth: { user: e.SMTP_USER, pass: e.SMTP_PASS } };
+  }
+  return null;
+}
+
 function getTransporter(): Transporter | null {
   if (transporter !== undefined) return transporter;
-  const url = env().SMTP_URL;
-  transporter = url ? nodemailer.createTransport(url) : null;
+  const cfg = smtpConfig(env());
+  transporter = cfg ? nodemailer.createTransport(cfg) : null;
   return transporter;
 }
 
