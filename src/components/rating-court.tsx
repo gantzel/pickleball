@@ -1,24 +1,23 @@
 import Link from "next/link";
-import type { TrainingLevel } from "@/db/schema";
-import { formatRating, formatRelative, formatBand } from "@/lib/format";
-import { levelProgress, ratingStateMessage, type RatingState } from "@/server/eligibility";
+import { formatRating, formatRelative } from "@/lib/format";
+import { ratingStateMessage, type RatingState } from "@/server/eligibility";
+import type { MyProgramme } from "./my-programmes";
 import { SyncButton } from "./sync-button";
 
 /**
- * The member's verified rating drawn on a court: white court lines on court
- * green, and the club's levels laid out as zones on a strip, with a ball at
- * the member's rating and a line at the next threshold.
+ * The member's verified rating drawn on a court (white lines on court green),
+ * with the programmes ("hold") the member can book right now.
  */
 export function RatingCourt({
   state,
-  levels,
+  programmes,
   ratingType,
   linked,
   integrationActive,
   isMock,
 }: {
   state: RatingState;
-  levels: TrainingLevel[];
+  programmes: MyProgramme[];
   ratingType: "DOUBLES" | "SINGLES";
   linked: boolean;
   integrationActive: boolean;
@@ -26,7 +25,6 @@ export function RatingCourt({
 }) {
   const verified = state.kind === "VERIFIED";
   const rating = verified ? state.rating : null;
-  const prog = rating !== null ? levelProgress(rating, levels) : null;
   const typeLabel = ratingType === "DOUBLES" ? "double" : "single";
 
   return (
@@ -71,70 +69,23 @@ export function RatingCourt({
       </div>
       </div>
 
-      {levels.length > 0 && <LevelStrip levels={levels} rating={rating} nextId={prog?.next?.id ?? null} gap={prog?.gap ?? null} />}
+      {programmes.length > 0 && <ProgrammeChips programmes={programmes} />}
     </section>
   );
 }
 
-function LevelStrip({ levels, rating, nextId, gap }: { levels: TrainingLevel[]; rating: number | null; nextId: string | null; gap: number | null }) {
-  // A level without a floor (e.g. "under 3.0") is drawn 0.75 wide.
-  const floorOf = (l: TrainingLevel) => l.minRating ?? (l.maxRating ?? 0) - 0.75;
-  const lo = Math.min(...levels.map(floorOf));
-  const hiLevel = levels[levels.length - 1];
-  const hi = Math.max(hiLevel.maxRating ?? floorOf(hiLevel) + 0.75, ...levels.map((l) => l.maxRating ?? floorOf(l)));
-  const isCurrent = (l: TrainingLevel) =>
-    rating !== null && (l.minRating === null || rating >= l.minRating) && (l.maxRating === null || rating < l.maxRating);
-  const pct = (r: number) => Math.min(100, Math.max(0, ((r - lo) / (hi - lo)) * 100));
-  const next = levels.find((l) => l.id === nextId) ?? null;
-
+function ProgrammeChips({ programmes }: { programmes: MyProgramme[] }) {
   return (
     <div className="relative border-t-2 border-white/25 px-6 pb-6 pt-5 sm:px-8">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[0.95rem]">
-        <h3 className="font-semibold">Niveauer i klubben</h3>
-        {rating !== null && next && gap !== null && (
-          <p className="text-white/90">
-            <span className="num font-bold text-ball">+{formatRating(gap)}</span> til {next.name} ({formatRating(next.minRating)})
-          </p>
-        )}
-        {rating !== null && !next && <p className="text-white/90">Du er på klubbens højeste niveau.</p>}
-      </div>
-      <div className="relative">
-        <ol className="flex h-11 overflow-hidden rounded-[8px] border-2 border-white/70" aria-label="Niveauer og ratinggrænser">
-          {levels.map((l, i) => {
-            const end = l.maxRating ?? hi;
-            const current = isCurrent(l);
-            return (
-              <li
-                key={l.id}
-                className={`relative flex min-w-0 items-center px-2 text-[0.78rem] font-semibold sm:text-sm ${i > 0 ? "border-l-2 border-white/70" : ""} ${current ? "bg-white/25" : "bg-black/10 text-white/65"}`}
-                style={{ width: `${pct(end) - pct(floorOf(l))}%` }}
-              >
-                <span className="truncate">{l.name}</span>
-                <span className="sr-only">
-                  , {formatBand(l.minRating, l.maxRating, true)}
-                  {current ? ", dit niveau" : ""}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-        {next && (
-          <div aria-hidden="true" className="absolute -bottom-1 -top-1 border-l-2 border-dashed border-ball" style={{ left: `${pct(floorOf(next))}%` }} />
-        )}
-        {rating !== null && (
-          <div
-            aria-hidden="true"
-            className="absolute top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink bg-ball shadow-[0_2px_0_rgba(0,0,0,.25)]"
-            style={{ left: `${pct(rating)}%` }}
-          >
-            <span className="absolute left-[7px] top-[5px] h-1 w-1 rounded-full bg-ink/70" />
-            <span className="absolute right-[6px] top-[9px] h-1 w-1 rounded-full bg-ink/70" />
-            <span className="absolute bottom-[5px] left-[9px] h-1 w-1 rounded-full bg-ink/70" />
-          </div>
-        )}
-      </div>
-      <p className="num mt-1.5 text-xs text-white/70" aria-hidden="true">{formatRating(lo)}</p>
-      <p className="mt-3 text-sm text-white/75">En højere rating åbner for flere træninger, men giver ikke plads på en fuld træning.</p>
+      <h3 className="mb-3 text-[0.95rem] font-semibold">Dine hold</h3>
+      <ul className="flex flex-wrap gap-2">
+        {programmes.map((p) => (
+          <li key={p.id} className="inline-flex items-center gap-2 rounded-full border-2 border-white/60 bg-white/10 px-3 py-1.5 text-sm font-semibold">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
+            {p.name}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

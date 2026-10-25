@@ -1,10 +1,11 @@
 import { and, asc, desc, eq, gte, lt } from "drizzle-orm";
 import { db } from "@/db";
-import { booking, duprLink, ratingSnapshot, trainingLevel, trainingSession, userAchievement } from "@/db/schema";
+import { booking, duprLink, levelMember, ratingSnapshot, trainingLevel, trainingSession, userAchievement } from "@/db/schema";
+import { ruleRangeLabel } from "@/lib/format";
 import type { Actor } from "./actor";
 import { describeAchievement, longestWeeklyStreak } from "./achievements";
 import { isProviderActive } from "./dupr/provider";
-import { computeRatingState, levelProgress, sortLevels } from "./eligibility";
+import { accessRule, computeRatingState, levelProgress, ruleEligibility, sortLevels } from "./eligibility";
 import { getSettings } from "./settings";
 
 /** Everything the dashboard/progress pages need about the member's rating and development. */
@@ -12,7 +13,17 @@ export async function memberProgress(actor: Actor, now = new Date()) {
   const settings = await getSettings();
   const [link] = await db.select().from(duprLink).where(eq(duprLink.userId, actor.id));
   const ratingState = computeRatingState(link ?? null, settings, now, isProviderActive);
-  const levels = sortLevels(await db.select().from(trainingLevel));
+  const allProgrammes = await db.select().from(trainingLevel).orderBy(asc(trainingLevel.sortOrder), asc(trainingLevel.name));
+  const levels = sortLevels(allProgrammes);
+  const rostered = new Set(
+    (await db.select({ levelId: levelMember.levelId }).from(levelMember).where(eq(levelMember.userId, actor.id))).map((r) => r.levelId),
+  );
+  // "Dine hold": the programmes the member can book right now (no ladder, no comparison).
+  const myProgrammes = allProgrammes.flatMap((l) => {
+    const rule = accessRule({ minRating: null, maxRating: null }, l);
+    if (ruleEligibility(rule, ratingState, rostered.has(l.id)).code !== "ELIGIBLE") return [];
+    return [{ id: l.id, name: l.name, color: l.color, description: l.description, access: ruleRangeLabel(rule) }];
+  });
 
   // Only snapshots from the currently active provider are shown as verified history.
   const snaps = await db
@@ -46,6 +57,7 @@ export async function memberProgress(actor: Actor, now = new Date()) {
     link: link ?? null,
     ratingState,
     levels,
+    myProgrammes,
     progress,
     history,
     historyIncludesProvider,

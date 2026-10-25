@@ -1,6 +1,7 @@
 import { EmptyState, PageHeader } from "@/components/app-shell";
+import { MyProgrammes } from "@/components/my-programmes";
 import { RatingChart } from "@/components/rating-chart";
-import { formatDate, formatMonthDay, formatRating, formatBand } from "@/lib/format";
+import { formatDate, formatMonthDay, formatRating } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
 import { ATTENDANCE_ACHIEVEMENTS, STREAK_ACHIEVEMENT, VERIFIED_ACHIEVEMENT } from "@/server/achievements";
 import { memberProgress } from "@/server/progress";
@@ -32,7 +33,7 @@ export default async function ProgressPage() {
         </div>
         {p.history.length ? (
           <>
-            <RatingChart points={p.history} levels={p.levels} attended={p.attendedSessions.map((s) => s.startsAt)} />
+            <RatingChart points={p.history} attended={p.attendedSessions.map((s) => s.startsAt)} />
             {!p.historyIncludesProvider && p.trackingSince && (
               <p className="mt-3 text-sm text-muted">
                 Vi har registreret din rating siden {formatDate(p.trackingSince)}, da din DUPR-profil blev koblet til. Ældre historik er ikke tilgængelig her.
@@ -46,28 +47,9 @@ export default async function ProgressPage() {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <section aria-labelledby="levels-h" className="panel p-5 sm:p-6">
-          <h2 id="levels-h" className="text-xl font-bold">Niveauer</h2>
-          <p className="mt-1 text-sm text-muted">Din verificerede DUPR-rating afgør automatisk, hvilket niveau du træner på. Stiger eller falder ratingen over en grænse, flytter din adgang med. Adgang giver ret til at booke, men ikke garanti for en plads.</p>
-          <ol className="mt-4 space-y-2">
-            {p.levels.map((l) => {
-              const current = p.progress?.current?.id === l.id;
-              const above = rating !== null && l.minRating !== null && l.minRating > rating;
-              const reached = current;
-              return (
-                <li key={l.id} className={`flex items-center gap-3 rounded-[10px] border p-3 ${current ? "border-court bg-court-soft" : "border-line"}`}>
-                  <span aria-hidden="true" className="h-8 w-1.5 rounded-full" style={{ background: l.color, opacity: reached ? 1 : 0.35 }} />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">
-                      {l.name} {current && <span className="text-sm font-medium text-court">(dit niveau)</span>}
-                    </p>
-                    <p className="num text-sm text-muted">{formatBand(l.minRating, l.maxRating, true)}</p>
-                  </div>
-                  <span className="text-sm font-medium">{current ? "Din adgang" : above ? `+${formatRating((l.minRating ?? 0) - rating!)}` : rating !== null ? "Under dit niveau" : "Kræver rating"}</span>
-                </li>
-              );
-            })}
-            {p.levels.length === 0 && <li className="text-sm text-muted">Klubben har ikke oprettet niveauer endnu.</li>}
-          </ol>
+          <h2 id="levels-h" className="text-xl font-bold">Dine hold</h2>
+          <p className="mt-1 text-sm text-muted">Det er de hold, du kan booke lige nu. Din verificerede DUPR-rating afgør det automatisk, og ændrer ratingen sig, følger din adgang med. Adgang giver ret til at booke, men ikke garanti for en plads.</p>
+          <MyProgrammes items={p.myProgrammes} verified={p.ratingState.kind === "VERIFIED"} />
         </section>
 
         <section aria-labelledby="ach-h" className="panel p-5 sm:p-6">

@@ -1,4 +1,3 @@
-import type { TrainingLevel } from "@/db/schema";
 import { formatMonthDay, formatRating } from "@/lib/format";
 
 interface Point {
@@ -11,7 +10,7 @@ interface Point {
  * observed change), extended to "now". Level thresholds are drawn as
  * reference lines and attended trainings as ticks on the time axis.
  */
-export function RatingChart({ points, levels, attended, now = new Date() }: { points: Point[]; levels: TrainingLevel[]; attended: Date[]; now?: Date }) {
+export function RatingChart({ points, attended, now = new Date() }: { points: Point[]; attended: Date[]; now?: Date }) {
   const W = 720;
   const H = 260;
   const pad = { l: 48, r: 16, t: 16, b: 34 };
@@ -31,7 +30,6 @@ export function RatingChart({ points, levels, attended, now = new Date() }: { po
 
   const ticks: number[] = [];
   for (let v = minV; v <= maxV + 1e-9; v += 0.25) ticks.push(Math.round(v * 100) / 100);
-  const thresholds = levels.flatMap((l) => (l.minRating !== null && l.minRating > minV && l.minRating < maxV ? [{ ...l, minRating: l.minRating }] : []));
   const xLabels = [t0, (t0 + t1) / 2, t1];
   const first = points[0].rating;
   const last = points[points.length - 1].rating;
@@ -45,14 +43,6 @@ export function RatingChart({ points, levels, attended, now = new Date() }: { po
             <line x1={pad.l} x2={W - pad.r} y1={y(v)} y2={y(v)} stroke="#d3ddd8" strokeWidth="1" />
             <text x={pad.l - 8} y={y(v) + 4} textAnchor="end" fontSize="12" fill="#52625b" className="num">
               {formatRating(v).slice(0, 4)}
-            </text>
-          </g>
-        ))}
-        {thresholds.map((l) => (
-          <g key={l.id}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(l.minRating)} y2={y(l.minRating)} stroke={l.color} strokeWidth="1.5" strokeDasharray="5 4" />
-            <text x={W - pad.r - 4} y={y(l.minRating) - 5} textAnchor="end" fontSize="12" fill={l.color} fontWeight="600">
-              {l.name}
             </text>
           </g>
         ))}

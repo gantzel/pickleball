@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/app-shell";
+import { MyProgrammes } from "@/components/my-programmes";
 import { RatingChart } from "@/components/rating-chart";
 import { RatingCourt } from "@/components/rating-court";
 import { SessionRow } from "@/components/session-row";
@@ -22,9 +23,7 @@ export default async function Dashboard() {
   const mine = views.filter((v) => ["BOOKED", "WAITLISTED"].includes(v.availability.code));
   const bookable = views.filter((v) => v.availability.code === "AVAILABLE");
   const full = views.filter((v) => v.availability.code === "FULL_WAITLIST");
-  const lockedCount = views.filter((v) => v.availability.code === "LOCKED_LOW").length;
   const rating = progress.ratingState.kind === "VERIFIED" ? progress.ratingState.rating : null;
-  const lockedLevels = rating === null ? progress.levels : progress.levels.filter((l) => l.minRating !== null && l.minRating > rating);
   const firstName = user.name.split(" ")[0];
   const past = history.filter((h) => h.s.startsAt < new Date()).slice(0, 5);
 
@@ -34,7 +33,7 @@ export default async function Dashboard() {
 
       <RatingCourt
         state={progress.ratingState}
-        levels={progress.levels}
+        programmes={progress.myProgrammes}
         ratingType={progress.settings.ratingType}
         linked={!!progress.link}
         integrationActive={!!integ.active}
@@ -112,31 +111,9 @@ export default async function Dashboard() {
         </div>
 
         <aside className="space-y-8">
-          <section aria-labelledby="locked-h" className="panel p-5">
-            <h2 id="locked-h" className="text-lg font-bold">Næste niveauer</h2>
-            {lockedLevels.length === 0 ? (
-              <p className="mt-2 text-sm text-muted">{progress.levels.length ? "Alle klubbens niveauer er åbne for dig." : "Klubben har ikke oprettet niveauer endnu."}</p>
-            ) : (
-              <ul className="mt-3 divide-y divide-line">
-                {lockedLevels.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <span className="flex items-center gap-2 font-medium">
-                      <span aria-hidden="true" className="h-3 w-3 rounded-full" style={{ background: l.color }} />
-                      {l.name}
-                    </span>
-                    <span className="text-right text-sm">
-                      <span className="num font-semibold">{formatRating(l.minRating)}</span>
-                      {rating !== null && <span className="block text-muted">+{formatRating((l.minRating ?? 0) - rating)}</span>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {lockedCount > 0 && (
-              <p className="mt-3 text-sm text-muted">
-                {lockedCount} kommende {lockedCount === 1 ? "træning kræver" : "træninger kræver"} en højere rating.
-              </p>
-            )}
+          <section aria-labelledby="mine-hold-h" className="panel p-5">
+            <h2 id="mine-hold-h" className="text-lg font-bold">Dine hold</h2>
+            <MyProgrammes items={progress.myProgrammes} verified={progress.ratingState.kind === "VERIFIED"} compact />
           </section>
 
           <section aria-labelledby="dev-h" className="panel p-5">
@@ -146,7 +123,7 @@ export default async function Dashboard() {
             </div>
             {progress.history.length >= 2 ? (
               <div className="mt-3">
-                <RatingChart points={progress.history} levels={progress.levels} attended={progress.attendedSessions.map((s) => s.startsAt)} />
+                <RatingChart points={progress.history} attended={progress.attendedSessions.map((s) => s.startsAt)} />
               </div>
             ) : (
               <p className="mt-2 text-sm text-muted">{progress.history.length === 1 ? `Første verificerede måling: ${formatRating(progress.history[0].rating)}. Kurven vises, når din rating ændrer sig.` : "Når din rating er verificeret, begynder vi at gemme målinger, så du kan følge din udvikling."}</p>
