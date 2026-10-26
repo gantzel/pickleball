@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "Pickleball København", template: "%s — Pickleball København" },
+  title: { default: "Copenhagen Pickleball Collective", template: "%s — Copenhagen Pickleball Collective" },
   description: "Book træninger, der passer til din DUPR-rating.",
   robots: { index: false, follow: false },
 };

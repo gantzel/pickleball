@@ -35,7 +35,7 @@ export async function AppShell({ user, children }: { user: CurrentUser; children
       )}
       <header className="sticky top-0 z-20 border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Link href="/" className="rounded-md" aria-label="Pickleball København, forside">
+          <Link href="/" className="rounded-md" aria-label="Copenhagen Pickleball Collective, forside">
             <Logo />
           </Link>
           <TopNav items={items} />

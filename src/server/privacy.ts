@@ -66,7 +66,7 @@ export async function exportMyData(actor: Actor) {
 
   return {
     exportedAt: new Date().toISOString(),
-    about: "Dine personoplysninger hos Pickleball København. Se /privatliv for hvordan de bruges.",
+    about: "Dine personoplysninger hos Copenhagen Pickleball Collective. Se /privatliv for hvordan de bruges.",
     profile: u,
     dupr: link ?? null,
     children,

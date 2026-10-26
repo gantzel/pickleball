@@ -38,7 +38,7 @@ export function sessionEvent(s: TrainingSession): IcsEvent {
 /** One session as an .ics file (any session the member can see). */
 export async function sessionIcs(actor: Actor, sessionId: string) {
   const v = await getSessionForMember(actor, sessionId);
-  return { filename: `traening-${v.session.startsAt.toISOString().slice(0, 10)}.ics`, body: buildIcs([sessionEvent(v.session)], { name: "Pickleball København" }) };
+  return { filename: `traening-${v.session.startsAt.toISOString().slice(0, 10)}.ics`, body: buildIcs([sessionEvent(v.session)], { name: "Copenhagen Pickleball Collective" }) };
 }
 
 const newToken = () => randomBytes(24).toString("base64url");
@@ -96,6 +96,6 @@ export async function calendarFeed(token: string, now = new Date()) {
       const e = sessionEvent(r.s);
       return r.childId ? { ...e, uid: `${r.childId}.${e.uid}`, summary: `${r.childName}: ${e.summary}` } : e;
     }),
-    { name: "Mine træninger — Pickleball København", now },
+    { name: "Mine træninger — Copenhagen Pickleball Collective", now },
   );
 }

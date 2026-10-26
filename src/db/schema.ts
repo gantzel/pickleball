@@ -1,5 +1,5 @@
 /**
- * Pickleball København — database schema (Drizzle ORM, PostgreSQL).
+ * Copenhagen Pickleball Collective — database schema (Drizzle ORM, PostgreSQL).
  *
  * Auth tables (user, session, account, verification, rateLimit) follow the
  * shape Better Auth expects. Everything else is application data.

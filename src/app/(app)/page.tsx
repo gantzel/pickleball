@@ -43,7 +43,7 @@ export default async function Dashboard() {
       <ProfileHero
         name={user.name}
         avatarKey={user.avatarKey}
-        subtitle={`Medlem af Pickleball København siden ${memberSince}`}
+        subtitle={`Medlem af Copenhagen Pickleball Collective siden ${memberSince}`}
         state={progress.ratingState}
         ratingType={progress.settings.ratingType}
         delta30={delta30}

@@ -9,7 +9,7 @@ export function Logo({ className = "" }: { className?: string }) {
         ))}
       </svg>
       <span className="font-[family-name:var(--font-display)] text-[1.05rem] font-bold leading-none tracking-tight">
-        Pickleball København
+        Copenhagen Pickleball Collective
       </span>
     </span>
   );

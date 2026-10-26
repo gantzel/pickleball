@@ -110,7 +110,7 @@ export async function deleteLevel(actor: Actor, id: string) {
   await audit(db, { actorId: actor.id, action: "level.delete", targetType: "level", targetId: id });
 }
 
-/** The club's standard structure (Pickleball København, Oct 2026). */
+/** The club's standard structure (Copenhagen Pickleball Collective, Oct 2026). */
 export const STANDARD_STRUCTURE = [
   { name: "Novice", kind: "LEVEL", minRating: null, maxRating: 3.0, allowUnrated: true, color: "#3a7d5c", description: "Grundteknik og udvikling. For DUPR under 3.0 — også nye spillere med koblet DUPR-profil, der endnu ikke har en rating." },
   { name: "Intermediate", kind: "LEVEL", minRating: 3.0, maxRating: 3.5, allowUnrated: false, color: "#2f6b8f", description: "Teknik, taktik og stabilitet. For DUPR 3.0–3.49." },
@@ -420,7 +420,7 @@ export async function setMembership(actor: Actor, userId: string, raw: unknown) 
       await notify(tx, effects, userId, {
         type: "MEMBERSHIP_ACTIVE",
         title: "Velkommen som medlem!",
-        body: "Dit medlemskab af Pickleball København er godkendt. Du kan nu booke træninger.",
+        body: "Dit medlemskab af Copenhagen Pickleball Collective er godkendt. Du kan nu booke træninger.",
         link: "/traeninger",
       });
     }
@@ -518,7 +518,7 @@ export async function setMemberRole(actor: Actor, userId: string, role: "MEMBER"
     await tx.update(user).set({ role }).where(eq(user.id, userId));
     await audit(tx, { actorId: actor.id, action: role === "ADMIN" ? "role.grant_admin" : "role.revoke_admin", targetType: "user", targetId: userId, metadata: { via: "admin_ui" } });
     await notify(tx, effects, userId, role === "ADMIN"
-      ? { type: "ROLE_ADMIN_GRANTED", title: "Du er nu administrator", body: "Du har fået adgang til admin-området for Pickleball København.", link: "/admin" }
+      ? { type: "ROLE_ADMIN_GRANTED", title: "Du er nu administrator", body: "Du har fået adgang til admin-området for Copenhagen Pickleball Collective.", link: "/admin" }
       : { type: "ROLE_ADMIN_REVOKED", title: "Din admin-adgang er fjernet", body: "Du har ikke længere adgang til admin-området." });
   });
   await effects.flush();

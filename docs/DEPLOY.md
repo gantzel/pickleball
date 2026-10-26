@@ -26,7 +26,7 @@ Optional, for many thousands of photos: an S3-compatible bucket (Cloudflare R2, 
 
 1. Create a Brevo account and **authenticate your domain** (Brevo shows DNS records to add at your domain host) so mail isn't flagged as spam.
 2. Under SMTP & API, create an SMTP key. Brevo shows an SMTP login (an email-like address).
-3. Variables: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<the SMTP login>`, `SMTP_PASS=<the SMTP key>` (mark it Secret), and `MAIL_FROM="Pickleball København <admin@yourdomain.dk>"` using a sender added and verified in Brevo on the authenticated domain. The sender address doesn't need a mailbox; set `MAIL_REPLY_TO` to a mailbox you read so members' replies arrive. (A single `SMTP_URL` also works; URL-encode `@` in the login as `%40`.)
+3. Variables: `SMTP_HOST=smtp-relay.brevo.com`, `SMTP_PORT=587`, `SMTP_USER=<the SMTP login>`, `SMTP_PASS=<the SMTP key>` (mark it Secret), and `MAIL_FROM="Copenhagen Pickleball Collective <admin@yourdomain.dk>"` using a sender added and verified in Brevo on the authenticated domain. The sender address doesn't need a mailbox; set `MAIL_REPLY_TO` to a mailbox you read so members' replies arrive. (A single `SMTP_URL` also works; URL-encode `@` in the login as `%40`.)
 
 ## 4. App — Vercel
 

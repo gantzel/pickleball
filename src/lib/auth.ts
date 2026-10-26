@@ -14,7 +14,7 @@ import { demoWithoutMail } from "./deploy-defaults";
  * never be set through sign-up or profile-update requests.
  */
 export const auth = betterAuth({
-  appName: "Pickleball København",
+  appName: "Copenhagen Pickleball Collective",
   baseURL: process.env.APP_URL ?? process.env.BETTER_AUTH_URL,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
@@ -54,7 +54,7 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user, url }) => {
       await sendMail({
         to: user.email,
-        subject: "Nulstil din adgangskode — Pickleball København",
+        subject: "Nulstil din adgangskode — Copenhagen Pickleball Collective",
         text: `Hej ${user.name}\n\nKlik på linket for at vælge en ny adgangskode. Linket virker i 1 time:\n${url}\n\nHar du ikke bedt om det, kan du se bort fra denne mail.`,
       });
     },
@@ -67,7 +67,7 @@ export const auth = betterAuth({
     sendVerificationEmail: async ({ user, url }) => {
       await sendMail({
         to: user.email,
-        subject: "Bekræft din e-mail — Pickleball København",
+        subject: "Bekræft din e-mail — Copenhagen Pickleball Collective",
         text: `Hej ${user.name}\n\nKlik på linket for at bekræfte din e-mail og aktivere din konto. Linket virker i 24 timer:\n${url}\n\nHar du ikke oprettet en konto, kan du se bort fra denne mail.`,
       });
     },

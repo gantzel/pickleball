@@ -35,7 +35,7 @@ A rating older than `staleAfterDays` (default 14) stops counting until refreshed
 
 Also ask: whether partners receive the doubles and singles rating and a reliability/provisional indicator (useful to decide how new players enter Level 1), and the terms for storing rating history.
 
-## What Pickleball København needs to do
+## What Copenhagen Pickleball Collective needs to do
 
 1. Contact DUPR (partnerships / club team) and request partner API access for a club training platform. Ask specifically for:
    - client key/secret for **UAT** first, then production;

@@ -37,7 +37,7 @@ const EnvSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  MAIL_FROM: z.string().default("Pickleball København <no-reply@example.com>"),
+  MAIL_FROM: z.string().default("Copenhagen Pickleball Collective <no-reply@example.com>"),
   /** Where members' replies to app emails go (MAIL_FROM can be a no-reply address). */
   MAIL_REPLY_TO: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
   /** First-admin bootstrap: this verified email becomes admin while the club has no admin. */

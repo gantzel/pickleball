@@ -11,7 +11,7 @@
  *    member-facing "Connect DUPR" login flow (how a member proves they own a
  *    DUPR ID) is documented to partners only.
  *
- * Until Pickleball København has partner credentials and the partner docs,
+ * Until Copenhagen Pickleball Collective has partner credentials and the partner docs,
  * this provider reports `isReady() === false`, so the app shows DUPR as
  * unavailable instead of pretending. Each method lists what to implement.
  * Do NOT implement this by scraping dupr.com or using a member's password.

@@ -1,6 +1,6 @@
-# Pickleball København — træningsplatform
+# Copenhagen Pickleball Collective — træningsplatform
 
-Member platform where Pickleball København members book training sessions that match their verified DUPR rating. Member-facing UI is Danish; code and docs are English.
+Member platform where Copenhagen Pickleball Collective members book training sessions that match their verified DUPR rating. Member-facing UI is Danish; code and docs are English.
 
 > **DUPR status:** the official DUPR integration is **not active yet** — it needs DUPR partner credentials. The app ships with a provider adapter, a development/demo-only mock provider, and a documented stub for the live provider. See [docs/DUPR_INTEGRATION.md](docs/DUPR_INTEGRATION.md).
 
