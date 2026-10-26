@@ -119,10 +119,9 @@ export function ProfileHero(p: ProfileHeroProps) {
           </div>
         </div>
 
-        <dl className="grid grid-cols-3 gap-2 sm:gap-3">
+        <dl className="grid grid-cols-2 gap-2 sm:gap-3">
           {[
             { label: "Træninger", value: p.trainings },
-            { label: "Seneste 30 dage", value: p.recent30 },
             { label: "Turneringer", value: p.events, hint: "DUPR-events" },
           ].map((t) => (
             <div key={t.label} className="rounded-[12px] border border-white/15 bg-white/5 p-3">
