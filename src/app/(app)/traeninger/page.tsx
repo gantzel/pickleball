@@ -29,11 +29,12 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen",
 export default async function SessionsPage({ searchParams }: { searchParams: Promise<{ vis?: string; visning?: string }> }) {
   const { vis, visning } = await searchParams;
   const active = FILTERS.find((f) => f.key === vis) ?? FILTERS[0];
-  const calendar = visning === "kalender";
+  // Calendar is the default view; the list has its own URL.
+  const calendar = visning !== "liste";
   const href = (filter: string, view: boolean) => {
     const q = new URLSearchParams();
     if (filter !== "alle") q.set("vis", filter);
-    if (view) q.set("visning", "kalender");
+    if (!view) q.set("visning", "liste");
     const qs = q.toString();
     return qs ? `/traeninger?${qs}` : "/traeninger";
   };

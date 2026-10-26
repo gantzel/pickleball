@@ -170,11 +170,12 @@ export async function ensureDemoSessions(
   people?: { admin: { id: string }; anna: { id: string; role: "MEMBER" | "ADMIN" }; mads: { id: string; role: "MEMBER" | "ADMIN" }; emmaId: string },
 ) {
   if (!devToolsAllowed()) return 0;
+  const topped = await topUpLevels(now);
   const [{ n }] = await db
     .select({ n: count() })
     .from(trainingSession)
     .where(and(eq(trainingSession.isDemo, true), eq(trainingSession.status, "PUBLISHED"), gt(trainingSession.startsAt, new Date(now.getTime() + 2 * DAY))));
-  if (Number(n) >= 4) return 0;
+  if (Number(n) >= 4) return topped;
 
   const levels = await db.select().from(trainingLevel);
   const L = (name: string) => levels.find((l) => l.name === name) ?? levels.find((l) => l.kind === "SOCIAL") ?? null;
@@ -240,6 +241,51 @@ export async function ensureDemoSessions(
     await tryBook(() => bookSession({ id: mads.id, role: mads.role }, first("Juniortræning")!.id, emmaId));
   }
   return created.length;
+}
+
+/**
+ * Every rating level keeps a few upcoming demo sessions (Intermediate — the
+ * demo member Anna's level — a few more), so there is always something to book.
+ */
+const LEVEL_TARGET: Record<string, number> = { Intermediate: 6 };
+const TOPUP_TITLES = ["Dink-spil", "Tredjeslag", "Resets og blokke", "Overgangszonen", "Serv og retur", "Matchspil med coaching", "Placering og tålmodighed", "Volleys ved nettet"];
+
+async function topUpLevels(now: Date) {
+  const admin = (await db.select({ id: user.id }).from(user).where(eq(user.email, DEMO_ACCOUNTS.admin)))[0];
+  if (!admin) return 0;
+  const levels = (await db.select().from(trainingLevel)).filter((l) => l.kind === "LEVEL");
+  let created = 0;
+  for (const [li, l] of levels.entries()) {
+    const target = LEVEL_TARGET[l.name] ?? 2;
+    const [{ n }] = await db
+      .select({ n: count() })
+      .from(trainingSession)
+      .where(and(eq(trainingSession.isDemo, true), eq(trainingSession.status, "PUBLISHED"), eq(trainingSession.levelId, l.id), gt(trainingSession.startsAt, new Date(now.getTime() + 3600_000))));
+    const missing = target - Number(n);
+    if (missing <= 0) continue;
+    const rows = Array.from({ length: missing }, (_, i) => {
+      const day = 2 + i * 3 + (li % 3); // spread over the coming weeks
+      const hour = [16, 17, 18][(i + li) % 3];
+      return {
+        title: TOPUP_TITLES[(i + li * 2) % TOPUP_TITLES.length],
+        focus: "Demo-træning",
+        description: "Demo-træning.",
+        levelId: l.id,
+        minRating: null,
+        maxRating: null,
+        startsAt: at(day, hour, 0, now),
+        endsAt: at(day, hour + 1, 30, now),
+        capacity: 12,
+        status: "PUBLISHED" as const,
+        isDemo: true,
+        createdById: admin.id,
+        ...VENUES[(i + li) % VENUES.length],
+      };
+    });
+    await db.insert(trainingSession).values(rows);
+    created += rows.length;
+  }
+  return created;
 }
 
 /** Called on page loads in a demo deployment; does nothing elsewhere. */

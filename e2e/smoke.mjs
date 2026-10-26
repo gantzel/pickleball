@@ -120,17 +120,17 @@ async function memberFlow(name, vp) {
   await page.screenshot({ path: `${OUT}/${name}-dashboard.png`, fullPage: true });
 
   // Book the first bookable session.
-  await go(page, "/traeninger?vis=kan-bookes");
+  await go(page, "/traeninger?vis=kan-bookes&visning=liste");
   const before = await text(page);
   assert.ok(before.includes("Kan bookes"), "an eligible session should be listed");
   await clickText(page, "button", "Book plads");
   await waitForText(page, "Du er booket.");
-  await go(page, "/traeninger?vis=mine");
+  await go(page, "/traeninger?vis=mine&visning=liste");
   await waitForText(page, "Booket");
   await page.screenshot({ path: `${OUT}/${name}-booked.png`, fullPage: true });
 
   // Locked sessions expose no booking controls.
-  await go(page, "/traeninger?vis=laast");
+  await go(page, "/traeninger?vis=laast&visning=liste");
   const lockedRows = await page.$$("li.panel");
   assert.ok(lockedRows.length > 0, "expected locked sessions");
   for (const row of lockedRows) {
@@ -139,7 +139,7 @@ async function memberFlow(name, vp) {
   }
 
   // Cancel the booking (two-step confirm).
-  await go(page, "/traeninger?vis=mine");
+  await go(page, "/traeninger?vis=mine&visning=liste");
   await clickText(page, "button", "Afmeld");
   await clickText(page, "button", "Ja, afmeld");
   await waitForText(page, "Din tilmelding er afmeldt.");
