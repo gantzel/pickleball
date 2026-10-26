@@ -135,6 +135,19 @@
     background: var(--color-surface);
     color: var(--color-ink);
   }
+  /* Own chevron so every browser places it the same, with air to the border. */
+  select.field {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.75rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2352625b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1rem;
+  }
+  select.field::-ms-expand {
+    display: none;
+  }
   .field:focus-visible {
     outline: 3px solid var(--color-court);
     outline-offset: 0;
