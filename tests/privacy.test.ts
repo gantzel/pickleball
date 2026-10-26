@@ -23,7 +23,8 @@ describe("data export", () => {
     expect(data.bookings.map((b) => b.session)).toEqual(["Eksporttræning"]);
     const json = JSON.stringify(data);
     expect(json).not.toContain("Anden Anna");
-    expect(json).not.toContain("3.9");
+    // The other member's rating must not appear as a value (timestamps may contain "3.9", e.g. "…:03.912Z").
+    expect(json).not.toMatch(/[:\[,]3\.9[,\]}]/);
     expect(json).not.toMatch(/password|avatar_key|token/i);
   });
 
