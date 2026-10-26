@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { formatRating, formatRelative } from "@/lib/format";
+import { formatRating } from "@/lib/format";
 import { ratingStateMessage, type RatingState } from "@/server/eligibility";
-import { SyncButton } from "./sync-button";
 
 export interface ProfileHeroProps {
   name: string;
@@ -23,7 +22,6 @@ export interface ProfileHeroProps {
 // Shared styles so the three columns line up.
 const LABEL = "flex h-6 items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white/70";
 const VALUE = "mt-1 flex min-h-[2.8rem] flex-wrap items-end gap-y-1 sm:min-h-[3.4rem]";
-const SUB = "mt-1.5 text-sm text-white/65";
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${formatRating(Math.abs(n))}`;
 
@@ -108,16 +106,6 @@ export function ProfileHero(p: ProfileHeroProps) {
                 <p className={`num ${VALUE} gap-3`}>
                   <span className="text-[clamp(2.6rem,8vw,3.25rem)] font-extrabold leading-none tracking-tight">{formatRating(rating)}</span>
                 </p>
-                <p className={`${SUB} flex flex-wrap items-center gap-x-2 gap-y-1`} title={`Synkroniseret ${formatRelative((p.state as Extract<RatingState, { kind: "VERIFIED" }>).syncedAt)}`}>
-                  {p.delta30 !== null ? (
-                    <>
-                      <DeltaBadge value={p.delta30} dark />
-                      <span>seneste 30 dage</span>
-                    </>
-                  ) : (
-                    <span>synkroniseret {formatRelative((p.state as Extract<RatingState, { kind: "VERIFIED" }>).syncedAt)}</span>
-                  )}
-                </p>
               </>
             ) : (
               <p className="mt-2 max-w-[38ch] text-white/85">{ratingStateMessage(p.state)}</p>
@@ -128,14 +116,12 @@ export function ProfileHero(p: ProfileHeroProps) {
             <p className={`num ${VALUE}`}>
               <span className="text-[clamp(2.2rem,6vw,3rem)] font-extrabold leading-none">{p.clubRank ? `#${p.clubRank.rank}` : "–"}</span>
             </p>
-            <p className={SUB}>{p.clubRank ? `af ${p.clubRank.total} med rating` : "kræver verificeret rating"}</p>
           </div>
           <div className="min-w-0 border-l border-white/20 px-3">
             <p className={LABEL}>Dit hold</p>
             <p className={VALUE}>
               <span className="break-words text-[clamp(1.4rem,3.6vw,1.9rem)] font-extrabold leading-none">{p.holdName ?? "–"}</span>
             </p>
-            <p className={SUB}>{p.holdName ? "følger din rating" : "kræver verificeret rating"}</p>
           </div>
         </div>
 
@@ -152,15 +138,14 @@ export function ProfileHero(p: ProfileHeroProps) {
           ))}
         </dl>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {p.linked && p.integrationActive && p.state.kind !== "REVOKED" ? (
-            <SyncButton />
-          ) : p.integrationActive ? (
+        {/* Members without a working DUPR link get the one action that moves them forward; syncing lives on the profile. */}
+        {p.integrationActive && (!p.linked || p.state.kind === "REVOKED") && (
+          <div>
             <Link href="/profil#dupr" className="btn bg-ball text-ink hover:bg-white">
               {p.state.kind === "REVOKED" ? "Kobl DUPR til igen" : "Kobl DUPR til"}
             </Link>
-          ) : null}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
