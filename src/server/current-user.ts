@@ -14,7 +14,7 @@ export const getCurrentUser = cache(async () => {
   const s = await auth.api.getSession({ headers: await headers() });
   if (!s) return null;
   const [row] = await db
-    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, avatarKey: user.avatarKey, emailNotifications: user.emailNotifications })
+    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, avatarKey: user.avatarKey, emailNotifications: user.emailNotifications, membershipStatus: user.membershipStatus, paidThrough: user.paidThrough })
     .from(user)
     .where(and(eq(user.id, s.user.id), isNull(user.deletedAt)));
   if (!row) return null;

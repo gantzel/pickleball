@@ -3,6 +3,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { z } from "zod";
 import { db } from "@/db";
 import { appSettings, auditEvent, booking, child, duprLink, duprSyncLog, levelMember, trainingLevel, trainingSession, user } from "@/db/schema";
+import { env } from "@/lib/env";
 import { DomainError } from "@/lib/errors";
 import type { Actor } from "./actor";
 import { requireAdmin } from "./actor";
@@ -10,7 +11,8 @@ import { audit } from "./audit";
 import { isProviderActive } from "./dupr/provider";
 import { computeRatingState } from "./eligibility";
 import { Effects } from "./effects";
-import { notify } from "./notify";
+import { clubToday, membershipState } from "./membership";
+import { notify, notifyAdmins } from "./notify";
 import { getSettings } from "./settings";
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
@@ -278,9 +280,22 @@ export async function updateSettings(actor: Actor, raw: unknown) {
 
 // ─── Members ─────────────────────────────────────────────────────────────────
 
-export async function searchMembers(actor: Actor, q: string, limit = 50) {
+export type MemberFilter = "alle" | "afventer" | "aktive" | "udloebet" | "afsluttet";
+
+export async function searchMembers(actor: Actor, q: string, limit = 50, filter: MemberFilter = "alle") {
   requireAdmin(actor);
   const term = q.trim().slice(0, 100);
+  const today = clubToday();
+  const statusWhere =
+    filter === "afventer"
+      ? eq(user.membershipStatus, "PENDING")
+      : filter === "afsluttet"
+        ? eq(user.membershipStatus, "ENDED")
+        : filter === "aktive"
+          ? and(eq(user.membershipStatus, "ACTIVE"), or(isNull(user.paidThrough), sql`${user.paidThrough} >= ${today}`))
+          : filter === "udloebet"
+            ? and(eq(user.membershipStatus, "ACTIVE"), sql`${user.paidThrough} < ${today}`)
+            : undefined;
   const settings = await getSettings();
   const now = new Date();
   const rows = await db
@@ -291,6 +306,7 @@ export async function searchMembers(actor: Actor, q: string, limit = 50) {
       and(
         isNull(user.deletedAt),
         term ? or(ilike(user.name, `%${term}%`), ilike(user.email, `%${term}%`), ilike(duprLink.externalId, `%${term}%`)) : undefined,
+        statusWhere,
       ),
     )
     .orderBy(asc(user.name))
@@ -302,6 +318,9 @@ export async function searchMembers(actor: Actor, q: string, limit = 50) {
     role: r.u.role,
     avatarKey: r.u.avatarKey,
     createdAt: r.u.createdAt,
+    emailVerified: r.u.emailVerified,
+    membership: membershipState(r.u),
+    paidThrough: r.u.paidThrough,
     link: r.link,
     ratingState: computeRatingState(r.link, settings, now, isProviderActive),
   }));
@@ -322,12 +341,101 @@ export async function getMemberAdmin(actor: Actor, id: string) {
     .where(eq(booking.userId, id));
   return {
     user: row.u,
+    membership: membershipState(row.u),
     link: row.link,
     ratingState: computeRatingState(row.link, settings, new Date(), isProviderActive),
     logs,
     attended: Number(stats?.attended ?? 0),
     activeBookings: Number(stats?.active ?? 0),
   };
+}
+
+/** Counts for the members page tabs. */
+export async function membershipCounts(actor: Actor) {
+  requireAdmin(actor);
+  const today = clubToday();
+  const [r] = await db
+    .select({
+      pending: sql<number>`count(*) filter (where ${user.membershipStatus} = 'PENDING')`,
+      lapsed: sql<number>`count(*) filter (where ${user.membershipStatus} = 'ACTIVE' and ${user.paidThrough} < ${today} and ${user.role} <> 'ADMIN')`,
+    })
+    .from(user)
+    .where(isNull(user.deletedAt));
+  return { pending: Number(r?.pending ?? 0), lapsed: Number(r?.lapsed ?? 0) };
+}
+
+const MembershipInput = z.object({
+  status: z.enum(["PENDING", "ACTIVE", "ENDED"]),
+  paidThrough: z
+    .union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ugyldig dato")])
+    .optional()
+    .transform((v) => (v ? v : null)),
+});
+
+/**
+ * Sets a member's club membership. Activating notifies the member. Ending a
+ * membership never cancels existing bookings silently — the admin is told how
+ * many upcoming bookings the member has, and can cancel them on each session.
+ */
+export async function setMembership(actor: Actor, userId: string, raw: unknown) {
+  requireAdmin(actor);
+  const p = MembershipInput.safeParse(raw);
+  if (!p.success) throw new DomainError("VALIDATION", p.error.issues[0]?.message ?? "Ugyldige oplysninger");
+  const effects = new Effects();
+  const res = await db.transaction(async (tx) => {
+    const [before] = await tx.select().from(user).where(and(eq(user.id, userId), isNull(user.deletedAt))).for("update");
+    if (!before) throw new DomainError("NOT_FOUND", "Medlemmet findes ikke.");
+    const now = new Date();
+    const [after] = await tx
+      .update(user)
+      .set({ membershipStatus: p.data.status, paidThrough: p.data.paidThrough, membershipUpdatedAt: now })
+      .where(eq(user.id, userId))
+      .returning();
+    const wasActive = membershipState(before, now) === "ACTIVE";
+    const isActive = membershipState(after, now) === "ACTIVE";
+    if (isActive && !wasActive) {
+      await notify(tx, effects, userId, {
+        type: "MEMBERSHIP_ACTIVE",
+        title: "Velkommen som medlem!",
+        body: "Dit medlemskab af Pickleball København er godkendt. Du kan nu booke træninger.",
+        link: "/traeninger",
+      });
+    }
+    await audit(tx, {
+      actorId: actor.id,
+      action: "member.membership",
+      targetType: "user",
+      targetId: userId,
+      metadata: { from: { status: before.membershipStatus, paidThrough: before.paidThrough }, to: p.data },
+    });
+    const [{ upcoming }] = await tx
+      .select({ upcoming: sql<number>`count(*)` })
+      .from(booking)
+      .where(and(eq(booking.userId, userId), inArray(booking.status, ["CONFIRMED", "WAITLISTED", "OFFERED"])));
+    return { active: isActive, upcomingBookings: Number(upcoming) };
+  });
+  await effects.flush();
+  return res;
+}
+
+/** New accounts: tell the admins there is someone to approve (DEMO_MODE deployments approve automatically). */
+export async function onNewAccount(userId: string) {
+  if (env().DEMO_MODE) {
+    await db.update(user).set({ membershipStatus: "ACTIVE", membershipUpdatedAt: new Date() }).where(eq(user.id, userId));
+    return;
+  }
+  const [u] = await db.select({ name: user.name, email: user.email, status: user.membershipStatus }).from(user).where(eq(user.id, userId));
+  if (!u || u.status !== "PENDING") return;
+  const effects = new Effects();
+  await db.transaction((tx) =>
+    notifyAdmins(tx, effects, {
+      type: "ADMIN_MEMBER_PENDING",
+      title: "Nyt medlem afventer godkendelse",
+      body: `${u.name} (${u.email}) har oprettet en konto. Godkend medlemskabet, når kontingentet er betalt.`,
+      link: "/admin/medlemmer?vis=afventer",
+    }),
+  );
+  await effects.flush();
 }
 
 // ─── Sync log & audit ────────────────────────────────────────────────────────

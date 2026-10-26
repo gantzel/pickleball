@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { setMembershipAction, addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { formatBand } from "@/lib/format";
 import { FormMessage } from "@/components/form-message";
 import { Chip } from "@/components/status-chip";
@@ -505,5 +505,64 @@ export function TestSessionsPanel({ count }: { count: number }) {
         <FormMessage state={state} />
       </div>
     </section>
+  );
+}
+
+export function ApproveButton({ userId, paidThrough }: { userId: string; paidThrough: string }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult | null>(null);
+  if (state?.ok) return <span className="text-sm font-medium text-court">Godkendt</span>;
+  return (
+    <span className="flex items-center gap-2">
+      <button
+        type="button"
+        className="btn btn-primary min-h-[36px] text-sm"
+        disabled={pending}
+        onClick={() => start(async () => setState(await setMembershipAction(userId, "ACTIVE", paidThrough)))}
+      >
+        Godkend
+      </button>
+      {state && !state.ok && <span className="text-xs text-alert">{state.message}</span>}
+    </span>
+  );
+}
+
+export function MembershipControl({ userId, status, paidThrough, suggestedPaidThrough }: { userId: string; status: "PENDING" | "ACTIVE" | "ENDED"; paidThrough: string | null; suggestedPaidThrough: string }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult<unknown> | null>(null);
+  const [st, setSt] = useState(status);
+  const [paid, setPaid] = useState(paidThrough ?? (status === "PENDING" ? suggestedPaidThrough : ""));
+  const upcoming = state?.ok && typeof state.data === "number" ? state.data : 0;
+  return (
+    <form
+      className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+      onSubmit={(e) => {
+        e.preventDefault();
+        start(async () => setState(await setMembershipAction(userId, st, paid)));
+      }}
+    >
+      <div>
+        <label htmlFor="ms-status" className="label">Status</label>
+        <select id="ms-status" className="field" value={st} onChange={(e) => setSt(e.target.value as typeof st)}>
+          <option value="PENDING">Afventer godkendelse</option>
+          <option value="ACTIVE">Aktivt medlem</option>
+          <option value="ENDED">Afsluttet</option>
+        </select>
+      </div>
+      <div>
+        <label htmlFor="ms-paid" className="label">Kontingent betalt til (valgfrit)</label>
+        <input id="ms-paid" type="date" className="field" value={paid} onChange={(e) => setPaid(e.target.value)} aria-describedby="ms-paid-h" />
+      </div>
+      <button className="btn btn-primary" disabled={pending}>Gem</button>
+      <p id="ms-paid-h" className="hint sm:col-span-3">
+        Efter datoen kan medlemmet ikke booke, før du forlænger. Lad feltet stå tomt, hvis I ikke vil styre det her.
+      </p>
+      <div className="sm:col-span-3">
+        <FormMessage state={state as ActionResult | null} />
+        {st === "ENDED" && upcoming > 0 && (
+          <p className="mt-1 text-sm text-wait">Medlemmet har stadig {upcoming} aktive tilmeldinger. De er ikke afmeldt — annullér dem på de enkelte træninger, hvis det er nødvendigt.</p>
+        )}
+      </div>
+    </form>
   );
 }

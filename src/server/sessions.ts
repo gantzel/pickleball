@@ -12,6 +12,7 @@ import { CHILD_STATE, lockSession, loadRatingState, offerFreedPlacesLocked, sess
 import { isProviderActive } from "./dupr/provider";
 import { Effects } from "./effects";
 import { accessRule, computeAvailability, computeRatingState, isActiveOffer, ratingFitsRule, type AccessRule, type Availability } from "./eligibility";
+import { loadMembership } from "./membership";
 import { notify } from "./notify";
 import { getSettings } from "./settings";
 
@@ -267,6 +268,7 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
   const onRoster = (levelId: string | null, childId: string | null) =>
     !!levelId && rosterRows.some((r) => r.levelId === levelId && (r.childId ?? null) === childId);
   const kids = await db.select({ id: child.id, name: child.name }).from(child).where(eq(child.parentId, actor.id)).orderBy(asc(child.createdAt));
+  const membership = await loadMembership(db, actor.id, now);
   const rows = await db
     .select({ sessionId: booking.sessionId, userId: booking.userId, childId: booking.childId, status: booking.status, offerExpiresAt: booking.offerExpiresAt, flag: booking.flag, waitlistedAt: booking.waitlistedAt, createdAt: booking.createdAt })
     .from(booking)
@@ -301,6 +303,7 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
         ratingState,
         rule,
         onRoster: onRoster(s.levelId, null),
+        membership,
         now,
       }),
       children: kids.map((k) => {
@@ -316,6 +319,7 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
             ratingState: CHILD_STATE,
             rule,
             onRoster: onRoster(s.levelId, k.id),
+            membership,
             now,
           }),
         };

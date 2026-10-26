@@ -43,7 +43,9 @@ async function ensureUser(email: string, name: string, role: "MEMBER" | "ADMIN")
     [u] = await db.select().from(user).where(eq(user.email, email));
   }
   // Demo accounts skip email verification.
-  if (u.role !== role || !u.emailVerified) await db.update(user).set({ role, emailVerified: true }).where(eq(user.id, u.id));
+  if (u.role !== role || !u.emailVerified || u.membershipStatus !== "ACTIVE") {
+    await db.update(user).set({ role, emailVerified: true, membershipStatus: "ACTIVE" }).where(eq(user.id, u.id));
+  }
   return { ...u, role };
 }
 

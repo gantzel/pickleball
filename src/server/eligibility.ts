@@ -182,6 +182,7 @@ export type Availability =
   | { code: "NOT_ON_ROSTER" }
   | { code: "DUPR_NEEDED"; reason: RatingState["kind"] }
   | { code: "NOT_FOR_CHILDREN" }
+  | { code: "MEMBERSHIP"; state: "PENDING" | "ENDED" | "LAPSED" }
   | { code: "NOT_OPEN"; opensAt: Date }
   | { code: "CLOSED" }
   | { code: "CANCELLED" }
@@ -205,6 +206,8 @@ export interface AvailabilityInput {
   rule?: AccessRule;
   /** Member is on the programme's roster (JUNIOR). */
   onRoster?: boolean;
+  /** Club membership; anything but ACTIVE blocks booking. Defaults to ACTIVE. */
+  membership?: "ACTIVE" | "PENDING" | "ENDED" | "LAPSED";
   now: Date;
 }
 
@@ -229,6 +232,7 @@ export function computeAvailability(i: AvailabilityInput): Availability {
   if (booking?.status === "WAITLISTED") return { code: "WAITLISTED", position: i.waitlistPosition ?? 0 };
 
   if (session.status !== "PUBLISHED" || session.startsAt <= now) return { code: "PAST" };
+  if (i.membership && i.membership !== "ACTIVE") return { code: "MEMBERSHIP", state: i.membership };
 
   const access = ruleEligibility(i.rule ?? accessRule(session, null), i.ratingState, i.onRoster ?? false);
   if (access.code !== "ELIGIBLE") return access;

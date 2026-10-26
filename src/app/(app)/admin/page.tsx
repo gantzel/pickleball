@@ -4,13 +4,14 @@ import { Chip } from "@/components/status-chip";
 import { formatShortDate, formatTime } from "@/lib/format";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { integrationStatus } from "@/server/dupr/provider";
+import { membershipCounts } from "@/server/admin";
 import { adminMetrics, listSessionsAdmin } from "@/server/sessions";
 
 export const metadata = { title: "Admin" };
 
 export default async function AdminHome() {
   const actor = toActor(await requireAdminUser());
-  const [m, upcoming] = await Promise.all([adminMetrics(actor), listSessionsAdmin(actor, { scope: "upcoming" })]);
+  const [m, upcoming, members] = await Promise.all([adminMetrics(actor), listSessionsAdmin(actor, { scope: "upcoming" }), membershipCounts(actor)]);
   const integ = integrationStatus();
   const fill = m.capacity ? Math.round(((m.confirmed + m.offered) / m.capacity) * 100) : 0;
   const stats = [
@@ -18,7 +19,7 @@ export default async function AdminHome() {
     { label: "Pladser booket", value: `${m.confirmed} / ${m.capacity}`, sub: `${fill}% fyldt` },
     { label: "På venteliste", value: m.waitlisted, sub: m.offered ? `${m.offered} tilbud afventer svar` : undefined },
     { label: "Markerede bookinger", value: m.flagged, sub: "Rating uden for niveau", href: m.flagged ? "/admin/traeninger" : undefined },
-    { label: "Aktive medlemmer", value: m.members },
+    { label: "Medlemmer", value: m.members, sub: members.pending ? `${members.pending} afventer godkendelse` : members.lapsed ? `${members.lapsed} med udløbet kontingent` : "Ingen afventer godkendelse", href: members.pending ? "/admin/medlemmer?vis=afventer" : members.lapsed ? "/admin/medlemmer?vis=udloebet" : "/admin/medlemmer" },
     { label: "DUPR-forbindelser", value: m.linksActive, sub: m.linksError || m.linksRevoked ? `${m.linksError} med fejl, ${m.linksRevoked} tilbagekaldt` : "Ingen fejl", href: "/admin/synk" },
   ];
   return (

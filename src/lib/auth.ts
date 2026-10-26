@@ -27,6 +27,21 @@ export const auth = betterAuth({
       rateLimit: schema.rateLimit,
     },
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        // New accounts await the club's approval; admins are told (see membership.ts).
+        after: async (u) => {
+          try {
+            const { onNewAccount } = await import("@/server/admin");
+            await onNewAccount(u.id);
+          } catch (e) {
+            console.error("[auth] new-account hook failed", e);
+          }
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,

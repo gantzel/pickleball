@@ -13,7 +13,7 @@
  */
 import { and, asc, count, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, type Tx } from "@/db";
-import { booking, child, duprLink, levelMember, trainingLevel, trainingSession, type AppSettings, type Child, type TrainingSession } from "@/db/schema";
+import { booking, child, duprLink, levelMember, trainingLevel, trainingSession, user, type AppSettings, type Child, type TrainingSession } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
 import { formatDate, formatDateTime, formatRating, formatTime } from "@/lib/format";
 import type { Actor } from "./actor";
@@ -30,6 +30,7 @@ import {
   type AccessRule,
   type RatingState,
 } from "./eligibility";
+import { assertActiveMember, membershipState } from "./membership";
 import { notify } from "./notify";
 import { getSettings } from "./settings";
 
@@ -122,6 +123,8 @@ export async function requireOwnChild(tx: Tx, actor: Actor, childId: string): Pr
 }
 
 async function assertEligible(tx: Tx, s: Session, userId: string, settings: AppSettings, now: Date, kid: Child | null = null) {
+  // Only active members book (children follow their parent's membership).
+  await assertActiveMember(tx, userId, now);
   const r = await memberEligibility(tx, s, await sessionRule(tx, s), userId, settings, now, kid?.id ?? null);
   if (kid && r.code !== "ELIGIBLE") {
     throw new DomainError(
@@ -212,8 +215,9 @@ export async function offerFreedPlacesLocked(tx: Tx, s: Session, effects: Effect
   const cfg = settings ?? (await getSettings(tx));
   const rule = await sessionRule(tx, s);
   const queue = await tx
-    .select({ b: booking, link: duprLink, rostered: levelMember.userId, childName: child.name })
+    .select({ b: booking, link: duprLink, rostered: levelMember.userId, childName: child.name, member: { role: user.role, membershipStatus: user.membershipStatus, paidThrough: user.paidThrough } })
     .from(booking)
+    .innerJoin(user, eq(user.id, booking.userId))
     .leftJoin(duprLink, eq(duprLink.userId, booking.userId))
     .leftJoin(child, eq(child.id, booking.childId))
     .leftJoin(
@@ -227,8 +231,9 @@ export async function offerFreedPlacesLocked(tx: Tx, s: Session, effects: Effect
     .where(and(eq(booking.sessionId, s.id), eq(booking.status, "WAITLISTED")))
     .orderBy(asc(booking.waitlistedAt), asc(booking.createdAt));
 
-  for (const { b, link, rostered, childName } of queue) {
+  for (const { b, link, rostered, childName, member } of queue) {
     if (free <= 0) break;
+    if (membershipState(member, now) !== "ACTIVE") continue; // keeps queue position
     const state = b.childId ? CHILD_STATE : computeRatingState(link, cfg, now, isProviderActive);
     if (ruleEligibility(rule, state, !!rostered).code !== "ELIGIBLE") continue; // keeps queue position
     const expiresAt = new Date(Math.min(now.getTime() + cfg.offerWindowHours * 3600_000, closes.getTime()));

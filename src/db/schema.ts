@@ -8,6 +8,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   customType,
+  date,
   boolean,
   check,
   index,
@@ -38,6 +39,8 @@ const rating = (name: string) => numeric(name, { precision: 5, scale: 3, mode: "
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
 export const roleEnum = pgEnum("role", ["MEMBER", "ADMIN"]);
+/** PENDING: new account awaiting the club's approval; ACTIVE: may book; ENDED: membership ended. */
+export const membershipStatusEnum = pgEnum("membership_status", ["PENDING", "ACTIVE", "ENDED"]);
 export const duprProviderEnum = pgEnum("dupr_provider", ["MOCK", "DUPR"]);
 export const duprLinkStatusEnum = pgEnum("dupr_link_status", ["ACTIVE", "ERROR", "REVOKED"]);
 export const snapshotSourceEnum = pgEnum("snapshot_source", [
@@ -119,6 +122,11 @@ export const user = pgTable("user", {
   role: roleEnum("role").notNull().default("MEMBER"),
   avatarKey: text("avatar_key"),
   emailNotifications: boolean("email_notifications").notNull().default(true),
+  /** Club membership (bylaws § 3): only active members can book. Not settable by the member. */
+  membershipStatus: membershipStatusEnum("membership_status").notNull().default("PENDING"),
+  /** Optional: membership fee paid through this date (inclusive); booking stops after it. */
+  paidThrough: date("paid_through", { mode: "string" }),
+  membershipUpdatedAt: ts("membership_updated_at"),
   /** Secret for the member's personal calendar feed (/api/kalender/<token>); rotatable. */
   calendarToken: text("calendar_token").unique(),
   deletedAt: ts("deleted_at"),

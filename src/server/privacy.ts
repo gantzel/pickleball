@@ -31,7 +31,7 @@ export { RETENTION };
 export async function exportMyData(actor: Actor) {
   await limit(`export:${actor.id}`, 5, 3600, "Du kan hente dine data igen om lidt.");
   const [u] = await db
-    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, emailNotifications: user.emailNotifications, hasProfilePhoto: sql<boolean>`${user.avatarKey} IS NOT NULL`, createdAt: user.createdAt })
+    .select({ id: user.id, name: user.name, email: user.email, emailVerified: user.emailVerified, role: user.role, emailNotifications: user.emailNotifications, membershipStatus: user.membershipStatus, membershipPaidThrough: user.paidThrough, hasProfilePhoto: sql<boolean>`${user.avatarKey} IS NOT NULL`, createdAt: user.createdAt })
     .from(user)
     .where(eq(user.id, actor.id));
   const [link] = await db

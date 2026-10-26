@@ -13,10 +13,14 @@ export async function resetDb() {
 }
 
 let n = 0;
-export async function makeUser(role: "MEMBER" | "ADMIN" = "MEMBER", name?: string): Promise<Actor> {
+export async function makeUser(
+  role: "MEMBER" | "ADMIN" = "MEMBER",
+  name?: string,
+  membershipStatus: "PENDING" | "ACTIVE" | "ENDED" = "ACTIVE",
+): Promise<Actor> {
   n++;
   const id = `u_${Date.now()}_${n}`;
-  await db.insert(user).values({ id, name: name ?? `Spiller ${n}`, email: `${id}@test.local`, role });
+  await db.insert(user).values({ id, name: name ?? `Spiller ${n}`, email: `${id}@test.local`, role, membershipStatus });
   return { id, role };
 }
 

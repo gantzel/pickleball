@@ -35,6 +35,7 @@ export default function PrivacyPage() {
         <H2>Hvilke oplysninger vi behandler</H2>
         <ul className="list-disc space-y-1 pl-5">
           <li><strong>Konto:</strong> navn, e-mail, krypteret adgangskode, om din e-mail er bekræftet, og om du er medlem eller administrator.</li>
+          <li><strong>Medlemskab:</strong> om dit medlemskab er godkendt, aktivt eller afsluttet, og eventuelt hvilken dato dit kontingent er betalt til.</li>
           <li><strong>Profilbillede</strong>, hvis du uploader et. Billedet beskæres, og metadata som GPS-position fjernes.</li>
           <li><strong>DUPR:</strong> dit DUPR-ID, navn på din DUPR-profil, din double- og single-rating og tidspunktet for hver opdatering. Vi henter dem fra DUPR, efter du har givet tilladelse.</li>
           <li><strong>Træning:</strong> bookinger, ventelistepladser, afmeldinger, fremmøde og milepæle.</li>

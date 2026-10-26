@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, rosterCandidates, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
+import { setMembership, addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, rosterCandidates, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -141,6 +141,16 @@ export async function testSessionsAction(command: "create" | "delete"): Promise<
     command === "create"
       ? await toActionResult(async () => `${await createTestSessions(actor)}`, "Testtræningerne er oprettet.")
       : await toActionResult(async () => `${await deleteTestSessions(actor)}`, "Alle testtræninger er slettet.");
+  refreshAdmin();
+  return res as ActionResult;
+}
+
+export async function setMembershipAction(userId: string, status: "PENDING" | "ACTIVE" | "ENDED", paidThrough: string): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(async () => {
+    const r = await setMembership(actor, userId, { status, paidThrough });
+    return r.upcomingBookings;
+  }, status === "ACTIVE" ? "Medlemskabet er aktivt." : status === "ENDED" ? "Medlemskabet er afsluttet." : "Medlemmet afventer godkendelse.");
   refreshAdmin();
   return res as ActionResult;
 }

@@ -6,7 +6,8 @@ import { isDomainError } from "@/lib/errors";
 import { formatDateTime, formatRating } from "@/lib/format";
 import { getMemberAdmin } from "@/server/admin";
 import { requireAdminUser, toActor } from "@/server/current-user";
-import { RetryButton, RoleControl } from "../../controls";
+import { endOfHalfYear, membershipMessage } from "@/server/membership";
+import { MembershipControl, RetryButton, RoleControl } from "../../controls";
 
 export default async function Member({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,6 +35,14 @@ export default async function Member({ params }: { params: Promise<{ id: string 
         <div className="panel p-4"><dt className="text-sm text-muted">Træninger deltaget</dt><dd className="num text-2xl font-bold">{m.attended}</dd></div>
         <div className="panel p-4"><dt className="text-sm text-muted">Aktive bookinger</dt><dd className="num text-2xl font-bold">{m.activeBookings}</dd></div>
       </dl>
+      <section className="panel p-5" aria-labelledby="ms-h">
+        <h2 id="ms-h" className="text-xl font-bold">Medlemskab</h2>
+        <p className="mb-3 mt-1 text-sm text-muted">
+          {m.user.role === "ADMIN" ? "Administratorer kan altid booke." : membershipMessage(m.membership)}
+          {!m.user.emailVerified && " E-mailadressen er ikke bekræftet endnu."}
+        </p>
+        <MembershipControl userId={m.user.id} status={m.user.membershipStatus} paidThrough={m.user.paidThrough} suggestedPaidThrough={endOfHalfYear()} />
+      </section>
       <section className="panel p-5">
         <h2 className="text-xl font-bold">DUPR</h2>
         {l ? (

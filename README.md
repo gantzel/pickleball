@@ -86,6 +86,9 @@ Every session belongs to a programme, and the programme decides who may book:
 
 Rating levels are half-open `[min, max)` and may not overlap, so every rating maps to exactly one level. Sessions on a rating level take the level's band (never their own limits), so adjusting a band applies to all its sessions at once, and members move between levels automatically as their DUPR rating changes — no manual assessment. Admin → Hold creates this structure with one click ("Opret klubbens hold") and edits it. Training sessions don't record results or affect ratings.
 
+**Membership approval**
+New accounts are *pending* until an admin approves them (bylaws § 3: membership is valid once the fee is paid). Pending, ended or lapsed members can browse but not book, join waitlists or accept offers — for themselves or their children — and waitlist offers skip them without losing their place. Admin → Medlemmer lists pending members (admins are notified of each new account) with a one-click "Godkend" that sets the fee as paid through the end of the current half-year; each member page can set the status and an optional "paid through" date, after which booking stops until it is extended. Admins can always book. Demo deployments (`DEMO_MODE=true`) approve new accounts automatically.
+
 **Children**
 Children (11–17) have no login. A parent adds them under Profil → Mine børn (name and birth year only) and books on their behalf; each booking/roster entry carries the child, so a parent and several children can hold separate places on the same session. Children can book roster programmes they are on (Børnehold) and open sessions, not rating programmes. Rosters and participant lists show the child's name with the label "Barn" and the parent as contact. Removing a child or deleting the parent's account releases the child's upcoming places and deletes the child's data.
 
