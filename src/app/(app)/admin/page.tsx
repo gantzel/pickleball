@@ -18,7 +18,7 @@ export default async function AdminHome() {
     { label: "Træninger de næste 14 dage", value: m.upcomingSessions },
     { label: "Pladser booket", value: `${m.confirmed} / ${m.capacity}`, sub: `${fill}% fyldt` },
     { label: "På venteliste", value: m.waitlisted, sub: m.offered ? `${m.offered} tilbud afventer svar` : undefined },
-    { label: "Markerede bookinger", value: m.flagged, sub: "Rating uden for niveau", href: m.flagged ? "/admin/traeninger" : undefined },
+    { label: "Markerede bookinger", value: m.flagged, sub: "Rating uden for niveau", href: m.flagged ? "/admin/traeninger?visning=liste" : undefined },
     { label: "Medlemmer", value: m.members, sub: members.pending ? `${members.pending} afventer godkendelse` : members.lapsed ? `${members.lapsed} med udløbet kontingent` : "Ingen afventer godkendelse", href: members.pending ? "/admin/medlemmer?vis=afventer" : members.lapsed ? "/admin/medlemmer?vis=udloebet" : "/admin/medlemmer" },
     { label: "DUPR-forbindelser", value: m.linksActive, sub: m.linksError || m.linksRevoked ? `${m.linksError} med fejl, ${m.linksRevoked} tilbagekaldt` : "Ingen fejl", href: "/admin/synk" },
   ];

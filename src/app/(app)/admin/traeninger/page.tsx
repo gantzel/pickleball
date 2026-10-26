@@ -27,7 +27,8 @@ const dayKey = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Copenhagen",
 
 export default async function AdminSessions({ searchParams }: { searchParams: Promise<{ vis?: string; visning?: string }> }) {
   const { vis, visning } = await searchParams;
-  const calendar = visning === "kalender";
+  // Calendar is the default view; the list has its own URL.
+  const calendar = visning !== "liste";
   const tab = TABS.find((t) => t.key === vis) ?? TABS[0];
   const actor = toActor(await requireAdminUser());
   const rows = await listSessionsAdmin(actor, { scope: calendar ? "calendar" : tab.key });
@@ -57,8 +58,8 @@ export default async function AdminSessions({ searchParams }: { searchParams: Pr
   const viewToggle = (
     <div role="group" aria-label="Visning" className="inline-flex self-start rounded-full border border-line bg-surface p-1">
       {[
-        { label: "Liste", href: "/admin/traeninger", on: !calendar },
-        { label: "Kalender", href: "/admin/traeninger?visning=kalender", on: calendar },
+        { label: "Liste", href: "/admin/traeninger?visning=liste", on: !calendar },
+        { label: "Kalender", href: "/admin/traeninger", on: calendar },
       ].map((o) => (
         <Link
           key={o.label}
@@ -90,7 +91,7 @@ export default async function AdminSessions({ searchParams }: { searchParams: Pr
       <>
       <nav aria-label="Vis" className="mb-5 flex gap-2">
         {TABS.map((t) => (
-          <Link key={t.key} href={`/admin/traeninger?vis=${t.key}`} aria-current={t.key === tab.key ? "page" : undefined} className="inline-flex min-h-[40px] items-center rounded-full border border-line bg-surface px-4 text-sm font-semibold aria-[current=page]:border-court aria-[current=page]:bg-court aria-[current=page]:text-white">
+          <Link key={t.key} href={`/admin/traeninger?visning=liste&vis=${t.key}`} aria-current={t.key === tab.key ? "page" : undefined} className="inline-flex min-h-[40px] items-center rounded-full border border-line bg-surface px-4 text-sm font-semibold aria-[current=page]:border-court aria-[current=page]:bg-court aria-[current=page]:text-white">
             {t.label}
           </Link>
         ))}

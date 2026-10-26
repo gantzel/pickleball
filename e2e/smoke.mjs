@@ -194,7 +194,7 @@ async function adminFlow(name, vp) {
   await page.screenshot({ path: `${OUT}/${name}-admin-session.png`, fullPage: true });
 
   // Seeded full session lists its participants.
-  await go(page, "/admin/traeninger");
+  await go(page, "/admin/traeninger?visning=liste");
   await clickText(page, "p.font-semibold", "Formiddagstræning");
   await page.waitForNavigation({ waitUntil: "networkidle0" }).catch(() => {});
   await waitForText(page, "Demospiller 1");
