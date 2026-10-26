@@ -1,3 +1,4 @@
+import { fromHeader } from "@/server/mailer";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -140,5 +141,12 @@ describe("programme cover photos", () => {
     expect(await readAvatar(k2)).toBeNull();
     await expect(setLevelImage(admin, level.id, Buffer.from("not an image"))).rejects.toMatchObject({ code: "VALIDATION" });
     setStorageForTests(undefined);
+  });
+});
+
+describe("mail sender name", () => {
+  it("uses the site name with the configured address", () => {
+    expect(fromHeader("Pickleball København <noreply@pickleballdenmark.com>")).toBe('"Copenhagen Pickleball Collective" <noreply@pickleballdenmark.com>');
+    expect(fromHeader("noreply@pickleballdenmark.com")).toBe('"Copenhagen Pickleball Collective" <noreply@pickleballdenmark.com>');
   });
 });

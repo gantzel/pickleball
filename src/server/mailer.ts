@@ -12,6 +12,14 @@ export interface Mail {
 
 let transporter: Transporter | null | undefined;
 
+export const SITE_NAME = "Copenhagen Pickleball Collective";
+
+/** The sender always shows the site's name; only the address comes from MAIL_FROM. */
+export function fromHeader(mailFrom: string) {
+  const address = mailFrom.match(/<([^>]+)>/)?.[1] ?? mailFrom.trim();
+  return `"${SITE_NAME}" <${address}>`;
+}
+
 /**
  * SMTP is configured either as one URL (SMTP_URL) or as separate fields
  * (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS) — the latter avoids having to
@@ -66,7 +74,7 @@ export async function sendMail(msg: Mail) {
   }
   try {
     const replyTo = env().MAIL_REPLY_TO;
-    await t.sendMail({ from: env().MAIL_FROM, ...(replyTo ? { replyTo } : {}), ...msg });
+    await t.sendMail({ from: fromHeader(env().MAIL_FROM), ...(replyTo ? { replyTo } : {}), ...msg });
   } catch (err) {
     console.error("[mail] failed to send", { to: msg.to, subject: msg.subject, err });
   }
