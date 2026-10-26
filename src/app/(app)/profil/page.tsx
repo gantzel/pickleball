@@ -50,7 +50,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         </p>
       )}
 
-      <section aria-labelledby="me-h" className="panel space-y-6 p-5 sm:p-6">
+      <section id="billede" aria-labelledby="me-h" className="panel scroll-mt-24 space-y-6 p-5 sm:p-6">
         <h2 id="me-h" className="text-xl font-bold">Dig</h2>
         <AvatarForm name={user.name} avatarKey={user.avatarKey} />
         <ProfileForm name={user.name} emailNotifications={user.emailNotifications} />

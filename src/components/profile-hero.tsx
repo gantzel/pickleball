@@ -62,14 +62,28 @@ export function ProfileHero(p: ProfileHeroProps) {
 
       <div className="relative grid gap-6 p-5 sm:p-8 md:max-w-[64%]">
         <div className="flex items-center gap-4">
-          {p.avatarKey ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`/api/avatars/${p.avatarKey}`} alt="" className="h-16 w-16 shrink-0 rounded-full border-2 border-white/80 object-cover sm:h-20 sm:w-20" />
-          ) : (
-            <span aria-hidden="true" className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-white/60 bg-white/10 text-2xl font-bold sm:h-20 sm:w-20">
-              {initials}
+          {/* The avatar is the way to change the photo. */}
+          <Link
+            href="/profil#billede"
+            aria-label={p.avatarKey ? "Skift profilbillede" : "Tilføj profilbillede"}
+            title={p.avatarKey ? "Skift profilbillede" : "Tilføj profilbillede"}
+            className="group relative shrink-0 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ball"
+          >
+            {p.avatarKey ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`/api/avatars/${p.avatarKey}`} alt="" className="h-16 w-16 rounded-full border-2 border-white/80 object-cover transition group-hover:opacity-85 sm:h-20 sm:w-20" />
+            ) : (
+              <span aria-hidden="true" className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-white/60 bg-white/10 text-2xl font-bold transition group-hover:bg-white/20 sm:h-20 sm:w-20">
+                {initials}
+              </span>
+            )}
+            <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#123329] bg-ball text-ink">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+                <path d="M2 5.5h2.5L6 3.5h4l1.5 2H14V13H2z" />
+                <circle cx="8" cy="9" r="2.3" />
+              </svg>
             </span>
-          )}
+          </Link>
           <div className="min-w-0">
             <h2 id="hero-name" className="truncate text-[clamp(1.4rem,4vw,2rem)] font-bold leading-tight">{p.name}</h2>
             <p className="text-[0.95rem] text-white/75">{p.subtitle}</p>
@@ -130,11 +144,6 @@ export function ProfileHero(p: ProfileHeroProps) {
               {p.state.kind === "REVOKED" ? "Kobl DUPR til igen" : "Kobl DUPR til"}
             </Link>
           ) : null}
-          {!p.avatarKey && (
-            <Link href="/profil" className="text-sm text-white/80 underline underline-offset-4 hover:text-white">
-              Tilføj et profilbillede
-            </Link>
-          )}
         </div>
       </div>
     </section>
