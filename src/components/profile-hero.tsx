@@ -83,7 +83,7 @@ export function ProfileHero(p: ProfileHeroProps) {
           </Link>
           <div className="min-w-0">
             <h2 id="hero-name" className="truncate text-[clamp(1.4rem,4vw,2rem)] font-bold leading-tight">{p.name}</h2>
-            <p className="text-[0.95rem] text-white/75">{p.subtitle}</p>
+            <p className="text-[12px] text-white/75">{p.subtitle}</p>
           </div>
         </div>
 
