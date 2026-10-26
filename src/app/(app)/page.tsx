@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/app-shell";
 import { MyProgrammes } from "@/components/my-programmes";
-import { RatingChart } from "@/components/rating-chart";
-import { RatingCourt } from "@/components/rating-court";
+import { DevelopmentCard } from "@/components/development-card";
+import { ProfileHero } from "@/components/profile-hero";
+import { SessionCard } from "@/components/session-card";
 import { SessionRow } from "@/components/session-row";
 import { Chip } from "@/components/status-chip";
-import { formatDateTime, formatRating, formatShortDate, formatTime } from "@/lib/format";
+import { formatDateTime, formatShortDate, formatTime } from "@/lib/format";
 import { requireUser, toActor } from "@/server/current-user";
 import { integrationStatus } from "@/server/dupr/provider";
 import { memberProgress } from "@/server/progress";
@@ -19,22 +20,38 @@ export default async function Dashboard() {
   const [views, progress, history] = await Promise.all([listUpcomingForMember(actor), memberProgress(actor), memberBookingHistory(actor, 8)]);
   const integ = integrationStatus();
 
+  const now = new Date();
   const offered = views.filter((v) => v.availability.code === "OFFERED");
   const mine = views.filter((v) => ["BOOKED", "WAITLISTED"].includes(v.availability.code));
-  const bookable = views.filter((v) => v.availability.code === "AVAILABLE");
-  const full = views.filter((v) => v.availability.code === "FULL_WAITLIST");
+  // "Træninger på dit niveau": what the member can book, sessions on their rating programme first.
+  const forYou = views
+    .filter((v) => ["AVAILABLE", "FULL_WAITLIST"].includes(v.availability.code))
+    .sort((a, b) => Number(b.rule.kind === "RATING") - Number(a.rule.kind === "RATING") || a.session.startsAt.getTime() - b.session.startsAt.getTime())
+    .slice(0, 3);
   const rating = progress.ratingState.kind === "VERIFIED" ? progress.ratingState.rating : null;
-  const firstName = user.name.split(" ")[0];
-  const past = history.filter((h) => h.s.startsAt < new Date()).slice(0, 5);
+  const past = history.filter((h) => h.s.startsAt < now).slice(0, 5);
+  // Change over the last 30 days: current rating minus the one in effect 30 days ago (or the first one since).
+  const cutoff = now.getTime() - 30 * 86400_000;
+  const atCutoff = [...progress.history].reverse().find((h) => h.at.getTime() <= cutoff) ?? progress.history[0];
+  const delta30 = rating !== null && atCutoff && progress.history.length > 1 ? rating - atCutoff.rating : null;
+  const memberSince = new Intl.DateTimeFormat("da-DK", { month: "long", year: "numeric", timeZone: "Europe/Copenhagen" }).format(user.createdAt ?? now);
 
   return (
     <div className="space-y-8">
-      <h1 className="text-[clamp(1.75rem,4vw,2.5rem)] font-bold">Hej, {firstName}</h1>
+      <h1 className="sr-only">Hjem</h1>
 
-      <RatingCourt
+      <ProfileHero
+        name={user.name}
+        avatarKey={user.avatarKey}
+        subtitle={`Medlem af Pickleball København siden ${memberSince}`}
         state={progress.ratingState}
-        programmes={progress.myProgrammes}
         ratingType={progress.settings.ratingType}
+        delta30={delta30}
+        clubRank={progress.clubRank}
+        events={progress.eventDates.length}
+        holdName={progress.progress?.current?.name ?? null}
+        trainings={progress.attendedCount}
+        recent30={progress.recentAttended}
         linked={!!progress.link}
         integrationActive={!!integ.active}
         isMock={integ.isMock}
@@ -64,25 +81,39 @@ export default async function Dashboard() {
         </section>
       )}
 
+      <section aria-labelledby="foryou-h" className="panel p-5 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 id="foryou-h" className="text-xl font-bold">Træninger på dit niveau</h2>
+            <p className="text-sm text-muted">Træninger, du kan booke nu — på dine hold.</p>
+          </div>
+          <Link href="/traeninger?vis=kan-bookes" className="link inline-flex items-center gap-1 text-sm font-semibold">
+            Se alle <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+        {forYou.length ? (
+          // Phones: a swipeable row; larger screens: a grid.
+          <ul className="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 [&>li]:w-[82%] [&>li]:shrink-0 [&>li]:snap-start sm:[&>li]:w-auto">
+            {forYou.map((v) => (
+              <SessionCard key={v.session.id} v={v} />
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title={rating === null ? "Ingen træninger kan bookes endnu" : "Ingen ledige træninger lige nu"}>
+            {rating === null ? "Kobl din DUPR-profil til, så åbner de hold, der passer til din rating. Social Play kan altid bookes." : "Nye træninger dukker op her, så snart de er lagt ud."}
+          </EmptyState>
+        )}
+      </section>
+
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-8">
-          <section aria-labelledby="bookable-h">
-            <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 id="bookable-h" className="text-xl font-bold">Kan bookes nu</h2>
-              <Link href="/traeninger" className="link text-sm">Alle træninger</Link>
-            </div>
-            {bookable.length ? (
-              <ul className="space-y-3">
-                {bookable.slice(0, 5).map((v) => (
-                  <SessionRow key={v.session.id} v={v} />
-                ))}
-              </ul>
-            ) : (
-              <EmptyState title={rating === null ? "Ingen træninger kan bookes endnu" : "Ingen ledige træninger på dit niveau lige nu"}>
-                {rating === null ? "Du skal have en verificeret DUPR-rating for at booke." : "Nye træninger dukker op her, så snart de er lagt ud."}
-              </EmptyState>
-            )}
-          </section>
+          <DevelopmentCard
+            points={progress.history.map((h) => ({ at: h.at.toISOString(), rating: h.rating }))}
+            attended={progress.attendedDates.map((d) => d.toISOString())}
+            events={progress.eventDates.map((d) => d.toISOString())}
+            ratingLabel={`DUPR ${progress.settings.ratingType === "DOUBLES" ? "double" : "single"}`}
+            now={now.toISOString()}
+          />
 
           <section aria-labelledby="mine-h">
             <h2 id="mine-h" className="mb-3 text-xl font-bold">Dine bookinger</h2>
@@ -96,48 +127,12 @@ export default async function Dashboard() {
               <EmptyState title="Du har ingen kommende bookinger" />
             )}
           </section>
-
-          {full.length > 0 && (
-            <section aria-labelledby="full-h">
-              <h2 id="full-h" className="mb-1 text-xl font-bold">Fulde træninger med venteliste</h2>
-              <p className="mb-3 text-sm text-muted">Bliver der en plads, tilbydes den til den første på ventelisten, der opfylder ratingkravet.</p>
-              <ul className="space-y-3">
-                {full.slice(0, 4).map((v) => (
-                  <SessionRow key={v.session.id} v={v} />
-                ))}
-              </ul>
-            </section>
-          )}
         </div>
 
         <aside className="space-y-8">
           <section aria-labelledby="mine-hold-h" className="panel p-5">
             <h2 id="mine-hold-h" className="text-lg font-bold">Dine hold</h2>
             <MyProgrammes items={progress.myProgrammes} verified={progress.ratingState.kind === "VERIFIED"} compact />
-          </section>
-
-          <section aria-labelledby="dev-h" className="panel p-5">
-            <div className="flex items-baseline justify-between">
-              <h2 id="dev-h" className="text-lg font-bold">Din udvikling</h2>
-              <Link href="/udvikling" className="link text-sm">Se mere</Link>
-            </div>
-            {progress.history.length >= 2 ? (
-              <div className="mt-3">
-                <RatingChart points={progress.history} attended={progress.attendedSessions.map((s) => s.startsAt)} />
-              </div>
-            ) : (
-              <p className="mt-2 text-sm text-muted">{progress.history.length === 1 ? `Første verificerede måling: ${formatRating(progress.history[0].rating)}. Kurven vises, når din rating ændrer sig.` : "Når din rating er verificeret, begynder vi at gemme målinger, så du kan følge din udvikling."}</p>
-            )}
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-[10px] bg-paper p-3">
-                <dt className="text-muted">Træninger i alt</dt>
-                <dd className="num text-2xl font-bold">{progress.attendedCount}</dd>
-              </div>
-              <div className="rounded-[10px] bg-paper p-3">
-                <dt className="text-muted">Seneste 30 dage</dt>
-                <dd className="num text-2xl font-bold">{progress.recentAttended}</dd>
-              </div>
-            </dl>
           </section>
 
           <section aria-labelledby="hist-h" className="panel p-5">
@@ -152,7 +147,7 @@ export default async function Dashboard() {
                         {formatShortDate(s.startsAt)} kl. {formatTime(s.startsAt)}
                       </span>
                     </Link>
-                    <Chip tone={b.attendance === "ATTENDED" ? "go" : b.status === "CANCELLED" ? "quiet" : "quiet"}>
+                    <Chip tone={b.attendance === "ATTENDED" ? "go" : "quiet"}>
                       {b.attendance === "ATTENDED" ? "Deltog" : b.attendance === "NO_SHOW" ? "Udeblev" : b.status === "CANCELLED" ? "Afmeldt" : b.status === "EXPIRED" ? "Udløbet" : "Booket"}
                     </Chip>
                   </li>

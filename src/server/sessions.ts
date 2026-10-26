@@ -245,6 +245,7 @@ export interface MemberSessionView {
   levelName: string | null;
   levelColor: string | null;
   levelKind: string | null;
+  levelImageKey: string | null;
   rule: AccessRule;
   /** One entry per child on the member's profile, with the child's own status. */
   children: { id: string; name: string; availability: Availability }[];
@@ -291,6 +292,7 @@ async function buildViews(sessions: TrainingSession[], actor: Actor, now: Date):
       levelName: level?.name ?? null,
       levelColor: level?.color ?? null,
       levelKind: level?.kind ?? null,
+      levelImageKey: level?.imageKey ?? null,
       rule,
       held,
       remaining: Math.max(0, s.capacity - held),

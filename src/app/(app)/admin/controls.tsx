@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { setMembershipAction, addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { levelImageAction, setMembershipAction, addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { formatBand } from "@/lib/format";
+import { ProgrammeCover } from "@/components/programme-cover";
 import { FormMessage } from "@/components/form-message";
 import { Chip } from "@/components/status-chip";
 import { SubmitButton } from "@/components/submit-button";
@@ -564,5 +565,29 @@ export function MembershipControl({ userId, status, paidThrough, suggestedPaidTh
         )}
       </div>
     </form>
+  );
+}
+
+export function LevelImageForm({ levelId, imageKey, color }: { levelId: string; imageKey: string | null; color: string }) {
+  const [state, action] = useActionState(levelImageAction, null);
+  return (
+    <div className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-[200px_1fr] sm:items-center">
+      <div className="overflow-hidden rounded-[10px] border border-line">
+        <ProgrammeCover imageKey={imageKey} color={color} />
+      </div>
+      <form action={action} className="space-y-2">
+        <input type="hidden" name="levelId" value={levelId} />
+        <label htmlFor={`li-${levelId}`} className="label">Billede til træningskort</label>
+        <input id={`li-${levelId}`} name="image" type="file" accept="image/jpeg,image/png,image/webp" className="block w-full text-sm" />
+        <p className="hint">Vises øverst på holdets træninger. Beskæres til 16:9. Brug kun billeder, klubben har ret til at bruge — og spørg folk på billedet.</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <SubmitButton className="btn btn-secondary">Upload billede</SubmitButton>
+          {imageKey && (
+            <button type="submit" name="remove" value="1" className="btn btn-ghost text-alert">Fjern billede</button>
+          )}
+          <FormMessage state={state} />
+        </div>
+      </form>
+    </div>
   );
 }

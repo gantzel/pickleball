@@ -121,3 +121,24 @@ describe("database storage (no extra provider)", () => {
     expect((await s.get("33333333-3333-3333-3333-333333333333.webp"))?.toString()).toBe("three");
   });
 });
+
+describe("programme cover photos", () => {
+  it("are re-encoded to 16:9 WebP, replaced cleanly and admin-only", async () => {
+    const { setLevelImage, removeLevelImage } = await import("@/server/admin");
+    const { makeLevel } = await import("./helpers");
+    setStorageForTests(dbStorage(pool));
+    const admin = await makeUser("ADMIN");
+    const level = await makeLevel();
+    const jpg = await sharp({ create: { width: 900, height: 900, channels: 3, background: "#2f6b8f" } }).jpeg().toBuffer();
+    await expect(setLevelImage(await makeUser(), level.id, jpg)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const k1 = await setLevelImage(admin, level.id, jpg);
+    const meta = await sharp((await readAvatar(k1))!).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 1200, 675]);
+    const k2 = await setLevelImage(admin, level.id, jpg);
+    expect(await readAvatar(k1)).toBeNull(); // old file removed
+    await removeLevelImage(admin, level.id);
+    expect(await readAvatar(k2)).toBeNull();
+    await expect(setLevelImage(admin, level.id, Buffer.from("not an image"))).rejects.toMatchObject({ code: "VALIDATION" });
+    setStorageForTests(undefined);
+  });
+});

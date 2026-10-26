@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/app-shell";
 import { listLevels, listRoster } from "@/server/admin";
 import { requireAdminUser, toActor } from "@/server/current-user";
-import { LevelForm, RosterPanel, StandardStructureButton } from "../controls";
+import { LevelForm, LevelImageForm, RosterPanel, StandardStructureButton } from "../controls";
 
 export const metadata = { title: "Hold — admin" };
 
@@ -31,6 +31,7 @@ export default async function LevelsPage() {
         {levels.map((l) => (
           <li key={l.id} className="panel border-l-4 p-5" style={{ borderLeftColor: l.color }}>
             <LevelForm level={l} />
+            <LevelImageForm levelId={l.id} imageKey={l.imageKey} color={l.color} />
             {l.kind === "JUNIOR" && <RosterPanel levelId={l.id} members={rosters.get(l.id) ?? []} />}
           </li>
         ))}

@@ -13,6 +13,7 @@ import { computeRatingState } from "./eligibility";
 import { Effects } from "./effects";
 import { clubToday, membershipState } from "./membership";
 import { notify, notifyAdmins } from "./notify";
+import { deleteAvatarFile, processCover } from "./uploads";
 import { getSettings } from "./settings";
 
 // ─── Levels ──────────────────────────────────────────────────────────────────
@@ -81,8 +82,30 @@ export async function saveLevel(actor: Actor, id: string | null, raw: unknown) {
   return row;
 }
 
+/** Sets (or replaces) a programme's cover photo; the previous file is removed. */
+export async function setLevelImage(actor: Actor, levelId: string, bytes: Buffer) {
+  requireAdmin(actor);
+  const [l] = await db.select({ imageKey: trainingLevel.imageKey }).from(trainingLevel).where(eq(trainingLevel.id, levelId));
+  if (!l) throw new DomainError("NOT_FOUND", "Holdet findes ikke.");
+  const key = await processCover(bytes);
+  await db.update(trainingLevel).set({ imageKey: key }).where(eq(trainingLevel.id, levelId));
+  if (l.imageKey) await deleteAvatarFile(l.imageKey);
+  await audit(db, { actorId: actor.id, action: "level.image", targetType: "level", targetId: levelId });
+  return key;
+}
+
+export async function removeLevelImage(actor: Actor, levelId: string) {
+  requireAdmin(actor);
+  const [l] = await db.select({ imageKey: trainingLevel.imageKey }).from(trainingLevel).where(eq(trainingLevel.id, levelId));
+  if (!l) throw new DomainError("NOT_FOUND", "Holdet findes ikke.");
+  await db.update(trainingLevel).set({ imageKey: null }).where(eq(trainingLevel.id, levelId));
+  if (l.imageKey) await deleteAvatarFile(l.imageKey);
+}
+
 export async function deleteLevel(actor: Actor, id: string) {
   requireAdmin(actor);
+  const [old] = await db.select({ imageKey: trainingLevel.imageKey }).from(trainingLevel).where(eq(trainingLevel.id, id));
+  if (old?.imageKey) await deleteAvatarFile(old.imageKey);
   await db.delete(trainingLevel).where(eq(trainingLevel.id, id));
   await audit(db, { actorId: actor.id, action: "level.delete", targetType: "level", targetId: id });
 }

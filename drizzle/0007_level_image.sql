@@ -1,0 +1,1 @@
+ALTER TABLE "training_level" ADD COLUMN "image_key" text;

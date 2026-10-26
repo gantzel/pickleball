@@ -21,7 +21,12 @@ function sniff(buf: Buffer): "jpeg" | "png" | "webp" | null {
   return null;
 }
 
-export async function processAvatar(bytes: Buffer): Promise<string> {
+/** Profile photo: 512×512, cropped around the most interesting area. */
+export const processAvatar = (bytes: Buffer) => processImage(bytes, 512, 512);
+/** Programme ("hold") cover photo for session cards: 1200×675 (16:9). */
+export const processCover = (bytes: Buffer) => processImage(bytes, 1200, 675);
+
+async function processImage(bytes: Buffer, width: number, height: number): Promise<string> {
   if (bytes.length === 0) throw new DomainError("VALIDATION", "Filen er tom.");
   if (bytes.length > MAX_AVATAR_BYTES) throw new DomainError("VALIDATION", "Billedet må højst være 5 MB.");
   if (!sniff(bytes)) throw new DomainError("VALIDATION", "Kun JPG-, PNG- og WebP-billeder er tilladt.");
@@ -29,7 +34,7 @@ export async function processAvatar(bytes: Buffer): Promise<string> {
   try {
     out = await sharp(bytes, { limitInputPixels: 40_000_000, failOn: "error" })
       .rotate()
-      .resize(512, 512, { fit: "cover", position: "attention" })
+      .resize(width, height, { fit: "cover", position: "attention" })
       .webp({ quality: 82 })
       .toBuffer();
   } catch {

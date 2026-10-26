@@ -50,6 +50,13 @@
       "when": 1793004139020,
       "tag": "0006_membership",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793006066257,
+      "tag": "0007_level_image",
+      "breakpoints": true
     }
   ]
 }

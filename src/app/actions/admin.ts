@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { toActionResult, type ActionResult } from "@/lib/errors";
-import { setMembership, addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, rosterCandidates, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
+import { removeLevelImage, setLevelImage, setMembership, addToRoster, applyStandardStructure, createTestSessions, deleteTestSessions, deleteLevel, removeFromRoster, rosterCandidates, saveLevel, setMemberRole, updateSettings } from "@/server/admin";
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
@@ -151,6 +151,21 @@ export async function setMembershipAction(userId: string, status: "PENDING" | "A
     const r = await setMembership(actor, userId, { status, paidThrough });
     return r.upcomingBookings;
   }, status === "ACTIVE" ? "Medlemskabet er aktivt." : status === "ENDED" ? "Medlemskabet er afsluttet." : "Medlemmet afventer godkendelse.");
+  refreshAdmin();
+  return res as ActionResult;
+}
+
+export async function levelImageAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const levelId = String(form.get("levelId") ?? "");
+  const res = await toActionResult(async () => {
+    if (form.get("remove") === "1") return void (await removeLevelImage(actor, levelId));
+    const file = form.get("image");
+    const { DomainError } = await import("@/lib/errors");
+    if (!(file instanceof File) || file.size === 0) throw new DomainError("VALIDATION", "Vælg et billede først.");
+    if (file.size > 5 * 1024 * 1024) throw new DomainError("VALIDATION", "Billedet må højst være 5 MB.");
+    await setLevelImage(actor, levelId, Buffer.from(await file.arrayBuffer()));
+  }, form.get("remove") === "1" ? "Billedet er fjernet." : "Billedet er gemt.");
   refreshAdmin();
   return res as ActionResult;
 }

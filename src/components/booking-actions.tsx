@@ -8,7 +8,7 @@ import { toast } from "./toaster";
 type Code = "AVAILABLE" | "FULL_WAITLIST" | "OFFERED" | "WAITLISTED" | "BOOKED" | string;
 
 /** Booking controls. The server re-checks every rule; this only picks which buttons to show. */
-export function BookingActions({ sessionId, code, compact = false, childId = null, childName }: { sessionId: string; code: Code; compact?: boolean; childId?: string | null; childName?: string }) {
+export function BookingActions({ sessionId, code, compact = false, full = false, childId = null, childName }: { sessionId: string; code: Code; compact?: boolean; full?: boolean; childId?: string | null; childName?: string }) {
   const [pending, start] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -21,7 +21,7 @@ export function BookingActions({ sessionId, code, compact = false, childId = nul
       if (r.message) toast(r.ok, r.message);
     });
 
-  const size = compact ? "btn" : "btn w-full sm:w-auto";
+  const size = full ? "btn w-full" : compact ? "btn" : "btn w-full sm:w-auto";
   let controls: React.ReactNode = null;
 
   if (code === "AVAILABLE") {
@@ -67,7 +67,7 @@ export function BookingActions({ sessionId, code, compact = false, childId = nul
   }
 
   return (
-    <div className="flex flex-col items-stretch gap-1 sm:items-end">
+    <div className={`flex flex-col items-stretch gap-1 ${full ? "" : "sm:items-end"}`}>
       {controls}
       <p role="status" aria-live="polite" className={`text-sm font-medium ${result?.ok ? "text-court" : "text-alert"}`}>
         {result?.message ?? ""}

@@ -331,6 +331,8 @@ export const trainingLevel = pgTable(
     /** LEVEL: members with a linked DUPR profile but no rating yet may book (beginners). */
     allowUnrated: boolean("allow_unrated").notNull().default(false),
     color: text("color").notNull().default("#2f6b4f"),
+    /** Optional cover photo for session cards (key in file storage, 16:9 WebP). */
+    imageKey: text("image_key"),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

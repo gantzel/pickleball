@@ -1,11 +1,13 @@
-import { and, asc, desc, eq, gte, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { booking, duprLink, levelMember, ratingSnapshot, trainingLevel, trainingSession, userAchievement } from "@/db/schema";
+import { booking, duprLink, levelMember, user, ratingSnapshot, trainingLevel, trainingSession, userAchievement } from "@/db/schema";
 import { ruleRangeLabel } from "@/lib/format";
 import type { Actor } from "./actor";
 import { describeAchievement, longestWeeklyStreak } from "./achievements";
 import { isProviderActive } from "./dupr/provider";
-import { accessRule, computeRatingState, levelProgress, ruleEligibility, sortLevels } from "./eligibility";
+import { activeProvider } from "./dupr/provider";
+import { accessRule, computeRatingState, levelProgress, ruleEligibility, sortLevels, type RatingState } from "./eligibility";
+import type { AppSettings } from "@/db/schema";
 import { getSettings } from "./settings";
 
 /** Everything the dashboard/progress pages need about the member's rating and development. */
@@ -52,6 +54,11 @@ export async function memberProgress(actor: Actor, now = new Date()) {
 
   const progress = ratingState.kind === "VERIFIED" ? levelProgress(ratingState.rating, levels) : null;
 
+  // DUPR events (the club's "DUPR-events" programme) the member took part in.
+  const levelKind = new Map(allProgrammes.map((l) => [l.id, l.kind]));
+  const eventDates = attended.filter((a) => a.s.levelId && levelKind.get(a.s.levelId) === "EVENT").map((a) => a.s.startsAt);
+  const clubRank = await clubRankFor(actor.id, ratingState, settings, now);
+
   return {
     settings,
     link: link ?? null,
@@ -63,6 +70,9 @@ export async function memberProgress(actor: Actor, now = new Date()) {
     historyIncludesProvider,
     trackingSince: history[0]?.at ?? link?.linkedAt ?? null,
     attendedCount: attended.length,
+    attendedDates: attended.map((a) => a.s.startsAt),
+    eventDates,
+    clubRank,
     recentAttended,
     longestStreak: longestWeeklyStreak(attended.map((a) => a.s.startsAt)),
     attendedSessions: attended.slice(0, 20).map((a) => a.s),
@@ -77,4 +87,36 @@ export async function upcomingAttendedCount(userId: string, from: Date, to: Date
     .innerJoin(trainingSession, eq(trainingSession.id, booking.sessionId))
     .where(and(eq(booking.userId, userId), eq(booking.status, "CONFIRMED"), gte(trainingSession.startsAt, from), lt(trainingSession.startsAt, to)));
   return rows.length;
+}
+
+/**
+ * The member's position among club members with a current verified rating
+ * (same provider, synced within the staleness window). Only the member's own
+ * position and the total are returned — never who is above or below.
+ */
+export async function clubRankFor(userId: string, state: RatingState, settings: AppSettings, now = new Date()) {
+  if (state.kind !== "VERIFIED") return null;
+  const provider = activeProvider();
+  if (!provider) return null;
+  const col = settings.ratingType === "SINGLES" ? duprLink.singlesRating : duprLink.doublesRating;
+  const fresh = new Date(now.getTime() - settings.staleAfterDays * 86400_000);
+  const [r] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      above: sql<number>`count(*) filter (where ${col} > ${state.rating})`,
+    })
+    .from(duprLink)
+    .innerJoin(user, eq(user.id, duprLink.userId))
+    .where(
+      and(
+        isNull(user.deletedAt),
+        eq(duprLink.provider, provider.key),
+        sql`${duprLink.status} <> 'REVOKED'`,
+        isNotNull(col),
+        gte(duprLink.lastSuccessfulSyncAt, fresh),
+      ),
+    );
+  const total = Number(r?.total ?? 0);
+  if (!total) return null;
+  return { rank: Number(r?.above ?? 0) + 1, total };
 }
