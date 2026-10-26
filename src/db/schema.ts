@@ -302,6 +302,8 @@ export const mockDuprPlayer = pgTable("mock_dupr_player", {
   doublesRating: rating("doubles_rating"),
   singlesRating: rating("singles_rating"),
   failMode: mockFailModeEnum("fail_mode").notNull().default("NONE"),
+  /** Test-provider rating history (demo only), returned like a provider's history endpoint. */
+  history: jsonb("history").$type<{ ratedAt: string; doubles: number | null; singles: number | null }[]>(),
   updatedAt: updatedAt(),
 });
 

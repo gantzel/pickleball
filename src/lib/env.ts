@@ -1,3 +1,4 @@
+import "./deploy-defaults";
 import { z } from "zod";
 
 /**

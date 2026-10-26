@@ -1,0 +1,1 @@
+ALTER TABLE "mock_dupr_player" ADD COLUMN "history" jsonb;

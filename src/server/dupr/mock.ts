@@ -62,9 +62,11 @@ export const mockProvider: RatingProvider = {
     }
   },
 
-  // The mock deliberately has no history: we never fabricate past ratings.
-  async getHistory(): Promise<HistoryPoint[]> {
-    return [];
+  // Test players may carry a history (demo data), served like DUPR's history endpoint.
+  async getHistory(externalId): Promise<HistoryPoint[]> {
+    assertAllowed();
+    const [p] = await db.select({ history: mockDuprPlayer.history }).from(mockDuprPlayer).where(eq(mockDuprPlayer.id, externalId));
+    return (p?.history ?? []).map((h) => ({ ratedAt: new Date(h.ratedAt), doubles: h.doubles, singles: h.singles }));
   },
 
   async parseWebhook(rawBody, headers): Promise<WebhookEvent> {

@@ -1,6 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["fra1"],
-  "buildCommand": "npm run db:migrate && npm run build",
-  "crons": [{ "path": "/api/cron/tick", "schedule": "0 3 * * *" }]
+  "regions": [
+    "fra1"
+  ],
+  "buildCommand": "npm run db:migrate && if [ \"$DEMO_MODE\" = \"true\" ]; then npm run db:seed; fi && npm run build",
+  "crons": [
+    {
+      "path": "/api/cron/tick",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

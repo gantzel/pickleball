@@ -15,7 +15,7 @@ import { audit } from "../audit";
 import { rateLimit } from "../rate-limit";
 import { activeProvider, providerFor } from "./provider";
 import { syncLink } from "./sync";
-import { ProviderError } from "./types";
+import { ProviderError, type RatingProvider } from "./types";
 
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 export const callbackUrl = () => new URL("/api/dupr/callback", env().APP_URL).toString();
@@ -112,15 +112,22 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
     metadata: { provider: provider.key, externalId: identity.externalId },
   });
 
-  // Import provider history if offered (never synthesised).
+  await importProviderHistory(actor.id, provider, identity.externalId);
+
+  const outcome = await syncLink(link.id, "LINK");
+  return { link, outcome };
+}
+
+/** Imports the provider's rating history once, at link time (never synthesised by the app). */
+export async function importProviderHistory(userId: string, provider: RatingProvider, externalId: string) {
   try {
-    const history = await provider.getHistory(identity.externalId);
+    const history = await provider.getHistory(externalId);
     if (history.length) {
       await db.insert(ratingSnapshot).values(
         history.slice(-500).map((h) => ({
-          userId: actor.id,
+          userId,
           provider: provider.key,
-          externalId: identity.externalId,
+          externalId,
           doublesRating: h.doubles,
           singlesRating: h.singles,
           source: "PROVIDER_HISTORY" as const,
@@ -131,9 +138,6 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
   } catch (e) {
     console.warn("[dupr] history import failed", e instanceof Error ? e.message : e);
   }
-
-  const outcome = await syncLink(link.id, "LINK");
-  return { link, outcome };
 }
 
 export async function unlink(actor: Actor) {

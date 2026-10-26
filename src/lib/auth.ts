@@ -1,9 +1,11 @@
+import "./deploy-defaults";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { sendMail } from "@/server/mailer";
+import { demoWithoutMail } from "./deploy-defaults";
 
 /**
  * Better Auth: email/password, database sessions, password reset and
@@ -29,7 +31,7 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 10,
     // Members must confirm they own the email address before they can log in.
-    requireEmailVerification: true,
+    requireEmailVerification: !demoWithoutMail(),
     maxPasswordLength: 128,
     autoSignIn: true,
     revokeSessionsOnPasswordReset: true,
