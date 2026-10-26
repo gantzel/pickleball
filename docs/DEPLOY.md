@@ -83,6 +83,16 @@ Set `INITIAL_ADMIN_EMAIL=you@example.com` in Vercel, then register on the live s
 
 After that, admins promote others under Admin → Medlemmer.
 
+## Demo site (optional)
+
+A separate Vercel project from the same repository, with its **own** database, shows the app with test data (never connect the production database to it):
+
+1. Vercel → Add New Project → import the repository, name it e.g. `pickleball-demo`, and add `DEMO_MODE=true` and `DUPR_PROVIDER=mock`.
+2. Storage → Create Database → Neon (Free, Frankfurt), connect it to the demo project with the prefix `DATABASE`.
+3. Deploy. The build migrates and seeds demo data (`npm run db:seed` runs only when `DEMO_MODE=true`); upcoming demo sessions are topped up automatically. No other variables are needed: the URL comes from Vercel and, in demo mode only, the auth secret is derived from the database URL. Demo sign-ups skip email verification.
+
+Demo logins (password `demo-pickleball-2026`): `anna@demo.pbk.local` (member with rating history), `mads@demo.pbk.local` (parent with a child), `sofie@demo.pbk.local`, `admin@demo.pbk.local`. The site shows a permanent "Demo" banner; ratings come from the labelled test provider, not DUPR.
+
 ## Launch checklist
 
 - [ ] Fill in the [bracketed] fields in the privacy policy (`src/app/privatliv/page.tsx`).
