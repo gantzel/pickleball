@@ -80,12 +80,6 @@ export function ProfileHero(p: ProfileHeroProps) {
                 {initials}
               </span>
             )}
-            <span aria-hidden="true" className="absolute -bottom-0.5 -right-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#123329] bg-ball text-ink">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-                <path d="M2 5.5h2.5L6 3.5h4l1.5 2H14V13H2z" />
-                <circle cx="8" cy="9" r="2.3" />
-              </svg>
-            </span>
           </Link>
           <div className="min-w-0">
             <h2 id="hero-name" className="truncate text-[clamp(1.4rem,4vw,2rem)] font-bold leading-tight">{p.name}</h2>
