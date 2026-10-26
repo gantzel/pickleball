@@ -81,27 +81,30 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
-      <section className="panel mt-6 p-5 sm:p-6" aria-label="Booking">
-        <p className="max-w-[60ch]">{explanation[a.code]}</p>
-        <div className="mt-4">
+      {/* Compact: explanation and places on the left, the action on the right (stacked on phones). */}
+      <section className="panel mt-6 flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5" aria-label="Booking">
+        <div className="min-w-0 flex-1">
+          <p className="max-w-[60ch]">{explanation[a.code]}</p>
+          {a.code !== "CANCELLED" && a.code !== "PAST" && (
+            <div className="mt-3 max-w-md">
+              <div className="mb-1 flex justify-between gap-3 text-sm text-muted">
+                <span>{v.remaining > 0 ? `${pluralPlaces(v.remaining)} ledige af ${s.capacity}` : `Fuld (${s.capacity} pladser)`}</span>
+                {v.waitlistCount > 0 && <span>{v.waitlistCount} på venteliste</span>}
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-court-soft" role="progressbar" aria-label="Pladser booket" aria-valuemin={0} aria-valuemax={s.capacity} aria-valuenow={v.held}>
+                <div className="h-full rounded-full bg-court" style={{ width: `${fill}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
           <BookingActions sessionId={s.id} code={a.code} />
           {(a.code === "BOOKED" || a.code === "OFFERED" || a.code === "WAITLISTED") && (
-            <a href={`/api/traeninger/${s.id}/kalender`} className="link mt-3 inline-block text-sm" download>
+            <a href={`/api/traeninger/${s.id}/kalender`} className="link text-center text-sm sm:text-right" download>
               Tilføj til kalender
             </a>
           )}
         </div>
-        {a.code !== "CANCELLED" && a.code !== "PAST" && (
-          <div className="mt-5">
-            <div className="mb-1 flex justify-between text-sm">
-              <span>{v.remaining > 0 ? `${pluralPlaces(v.remaining)} ledige af ${s.capacity}` : `Fuld (${s.capacity} pladser)`}</span>
-              {v.waitlistCount > 0 && <span className="text-muted">{v.waitlistCount} på venteliste</span>}
-            </div>
-            <div className="h-2.5 overflow-hidden rounded-full bg-court-soft" role="progressbar" aria-label="Pladser booket" aria-valuemin={0} aria-valuemax={s.capacity} aria-valuenow={v.held}>
-              <div className="h-full rounded-full bg-court" style={{ width: `${fill}%` }} />
-            </div>
-          </div>
-        )}
       </section>
 
       <dl className="mt-6 grid gap-4 sm:grid-cols-2">
