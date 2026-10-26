@@ -22,7 +22,7 @@ export interface ProfileHeroProps {
 
 // Shared styles so the three columns line up.
 const LABEL = "flex h-6 items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white/70";
-const VALUE = "mt-1 flex min-h-[2.8rem] flex-wrap items-end sm:min-h-[4rem]";
+const VALUE = "mt-1 flex min-h-[2.8rem] flex-wrap items-end gap-y-1 sm:min-h-[3.4rem]";
 const SUB = "mt-1.5 text-sm text-white/65";
 
 const signed = (n: number) => `${n >= 0 ? "+" : "−"}${formatRating(Math.abs(n))}`;
@@ -96,8 +96,9 @@ export function ProfileHero(p: ProfileHeroProps) {
         </div>
 
         {/* Three aligned columns: same label style, values on a common bottom line, sub-lines below. */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-[auto_auto_minmax(0,1fr)] sm:gap-x-0">
-          <div className="col-span-2 sm:col-span-1 sm:pr-7">
+        {/* Same grid and gaps as the three boxes below, so the columns are equal and line up with them. */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-5 sm:grid-cols-3 sm:gap-3">
+          <div className="col-span-2 min-w-0 px-3 sm:col-span-1">
             <p className={LABEL}>
               DUPR {p.ratingType === "DOUBLES" ? "double" : "single"}
               {p.isMock && <span className="rounded-full bg-ball px-2 py-0.5 text-[0.7rem] normal-case tracking-normal text-ink">Demo</span>}
@@ -105,28 +106,34 @@ export function ProfileHero(p: ProfileHeroProps) {
             {rating !== null ? (
               <>
                 <p className={`num ${VALUE} gap-3`}>
-                  <span className="text-[clamp(2.8rem,9vw,4rem)] font-extrabold leading-none tracking-tight">{formatRating(rating)}</span>
-                  {p.delta30 !== null && <span className="mb-1"><DeltaBadge value={p.delta30} dark /></span>}
+                  <span className="text-[clamp(2.6rem,8vw,3.25rem)] font-extrabold leading-none tracking-tight">{formatRating(rating)}</span>
                 </p>
-                <p className={SUB}>
-                  {p.delta30 !== null ? "Seneste 30 dage · " : ""}synkroniseret {formatRelative((p.state as Extract<RatingState, { kind: "VERIFIED" }>).syncedAt)}
+                <p className={`${SUB} flex flex-wrap items-center gap-x-2 gap-y-1`} title={`Synkroniseret ${formatRelative((p.state as Extract<RatingState, { kind: "VERIFIED" }>).syncedAt)}`}>
+                  {p.delta30 !== null ? (
+                    <>
+                      <DeltaBadge value={p.delta30} dark />
+                      <span>seneste 30 dage</span>
+                    </>
+                  ) : (
+                    <span>synkroniseret {formatRelative((p.state as Extract<RatingState, { kind: "VERIFIED" }>).syncedAt)}</span>
+                  )}
                 </p>
               </>
             ) : (
               <p className="mt-2 max-w-[38ch] text-white/85">{ratingStateMessage(p.state)}</p>
             )}
           </div>
-          <div className="sm:border-l sm:border-white/20 sm:px-7">
+          <div className="min-w-0 px-3 sm:border-l sm:border-white/20">
             <p className={LABEL}>Rang i klubben</p>
             <p className={`num ${VALUE}`}>
-              <span className="text-[clamp(2.2rem,7vw,3rem)] font-extrabold leading-none">{p.clubRank ? `#${p.clubRank.rank}` : "–"}</span>
+              <span className="text-[clamp(2.2rem,6vw,3rem)] font-extrabold leading-none">{p.clubRank ? `#${p.clubRank.rank}` : "–"}</span>
             </p>
             <p className={SUB}>{p.clubRank ? `af ${p.clubRank.total} med rating` : "kræver verificeret rating"}</p>
           </div>
-          <div className="min-w-0 sm:border-l sm:border-white/20 sm:pl-7">
+          <div className="min-w-0 border-l border-white/20 px-3">
             <p className={LABEL}>Dit hold</p>
             <p className={VALUE}>
-              <span className="break-words text-[clamp(1.6rem,5vw,2.25rem)] font-extrabold leading-none">{p.holdName ?? "–"}</span>
+              <span className="break-words text-[clamp(1.4rem,3.6vw,1.9rem)] font-extrabold leading-none">{p.holdName ?? "–"}</span>
             </p>
             <p className={SUB}>{p.holdName ? "følger din rating" : "kræver verificeret rating"}</p>
           </div>
