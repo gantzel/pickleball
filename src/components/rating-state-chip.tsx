@@ -12,6 +12,8 @@ export function RatingStateChip({ state }: { state: RatingState }) {
       return <Chip>Ikke koblet</Chip>;
     case "REVOKED":
       return <Chip tone="alert">Tilbagekaldt</Chip>;
+    case "RESTRICTED":
+      return <Chip tone="alert">Begrænset af DUPR</Chip>;
     case "NO_RATING":
       return <Chip tone="lock">Ingen rating</Chip>;
     case "INTEGRATION_UNAVAILABLE":

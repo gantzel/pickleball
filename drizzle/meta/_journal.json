@@ -57,6 +57,13 @@
       "when": 1793006066257,
       "tag": "0007_level_image",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793951060394,
+      "tag": "0008_dupr_partner",
+      "breakpoints": true
     }
   ]
 }

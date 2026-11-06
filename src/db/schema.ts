@@ -42,7 +42,7 @@ export const roleEnum = pgEnum("role", ["MEMBER", "ADMIN"]);
 /** PENDING: new account awaiting the club's approval; ACTIVE: may book; ENDED: membership ended. */
 export const membershipStatusEnum = pgEnum("membership_status", ["PENDING", "ACTIVE", "ENDED"]);
 export const duprProviderEnum = pgEnum("dupr_provider", ["MOCK", "DUPR"]);
-export const duprLinkStatusEnum = pgEnum("dupr_link_status", ["ACTIVE", "ERROR", "REVOKED"]);
+export const duprLinkStatusEnum = pgEnum("dupr_link_status", ["ACTIVE", "ERROR", "REVOKED", "RESTRICTED"]);
 export const snapshotSourceEnum = pgEnum("snapshot_source", [
   "LINK",
   "SCHEDULED_SYNC",
@@ -232,6 +232,10 @@ export const duprLink = pgTable(
     lastError: text("last_error"),
     consecutiveFailures: integer("consecutive_failures").notNull().default(0),
     nextSyncAfter: ts("next_sync_after"),
+    /** The member's read-only DUPR tokens from SSO, AES-GCM encrypted (see lib/secretbox). Used only for the entitlement check. */
+    accessTokenEnc: text("access_token_enc"),
+    refreshTokenEnc: text("refresh_token_enc"),
+    accessCheckedAt: ts("access_checked_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

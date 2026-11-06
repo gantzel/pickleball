@@ -69,7 +69,7 @@ export const mockProvider: RatingProvider = {
     return (p?.history ?? []).map((h) => ({ ratedAt: new Date(h.ratedAt), doubles: h.doubles, singles: h.singles }));
   },
 
-  async parseWebhook(rawBody, headers): Promise<WebhookEvent> {
+  async parseWebhook(rawBody, headers, _url): Promise<WebhookEvent> {
     assertAllowed();
     const secret = env().DUPR_WEBHOOK_SECRET;
     const sig = headers.get("x-webhook-signature") ?? "";

@@ -5,7 +5,7 @@ import { formatDateTime, formatRating } from "@/lib/format";
 import { listSyncProblems } from "@/server/admin";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { integrationStatus } from "@/server/dupr/provider";
-import { RetryButton } from "../controls";
+import { DuprWebhookButton, RetryButton } from "../controls";
 
 export const metadata = { title: "DUPR-synk — admin" };
 
@@ -20,8 +20,14 @@ export default async function SyncPage() {
         <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-3">
           <div><dt className="text-muted">Konfigureret udbyder</dt><dd className="font-semibold">{integ.configured}</dd></div>
           <div><dt className="text-muted">Aktiv</dt><dd className="font-semibold">{integ.active ? integ.label : "Ingen"}</dd></div>
-          <div><dt className="text-muted">Officiel DUPR-integration</dt><dd className="font-semibold">{integ.liveReady ? "Klar" : "Ikke aktiveret (afventer partneradgang)"}</dd></div>
+          <div><dt className="text-muted">Officiel DUPR-integration</dt><dd className="font-semibold">{integ.liveReady ? `Klar (${integ.duprEnv === "uat" ? "testmiljø" : "produktion"})` : "Ikke aktiveret (mangler nøgler)"}</dd></div>
         </dl>
+        {integ.active === "DUPR" && (
+          <div className="mt-4 space-y-2 border-t border-line pt-4">
+            <p className="text-sm text-muted">Bed DUPR om at give besked, når en rating ændrer sig. Gøres én gang efter opsætning, og igen hvis adressen skifter.</p>
+            <DuprWebhookButton />
+          </div>
+        )}
         <p className="mt-3 text-sm text-muted">Fejlede forsøg i det seneste døgn: <span className="num font-semibold text-ink">{data.failed24h}</span></p>
       </section>
 

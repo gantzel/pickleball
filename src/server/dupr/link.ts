@@ -9,6 +9,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { duprLink, duprLinkRequest, ratingSnapshot } from "@/db/schema";
 import { env } from "@/lib/env";
+import { seal } from "@/lib/secretbox";
 import { DomainError } from "@/lib/errors";
 import type { Actor } from "../actor";
 import { audit } from "../audit";
@@ -76,6 +77,10 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
     throw new DomainError("CONFLICT", "Denne DUPR-profil er allerede koblet til en anden konto. Kontakt klubben, hvis det er en fejl.");
   }
 
+  const tokens = identity.credentials
+    ? { accessTokenEnc: seal(identity.credentials.accessToken), refreshTokenEnc: seal(identity.credentials.refreshToken), accessCheckedAt: now }
+    : { accessTokenEnc: null, refreshTokenEnc: null, accessCheckedAt: null };
+  const status = identity.restricted ? ("RESTRICTED" as const) : ("ACTIVE" as const);
   const [link] = await db
     .insert(duprLink)
     .values({
@@ -83,8 +88,9 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
       provider: provider.key,
       externalId: identity.externalId,
       displayName: identity.displayName,
-      status: "ACTIVE",
+      status,
       linkedAt: now,
+      ...tokens,
     })
     .onConflictDoUpdate({
       target: duprLink.userId,
@@ -92,8 +98,9 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
         provider: provider.key,
         externalId: identity.externalId,
         displayName: identity.displayName,
-        status: "ACTIVE",
+        status,
         linkedAt: now,
+        ...tokens,
         doublesRating: null,
         singlesRating: null,
         lastSuccessfulSyncAt: null,
@@ -113,6 +120,13 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
   });
 
   await importProviderHistory(actor.id, provider, identity.externalId);
+
+  // Ask for rating-change webhooks; the daily sync covers us if this fails.
+  try {
+    await provider.subscribe?.([identity.externalId]);
+  } catch (e) {
+    console.warn("[dupr] webhook subscribe failed", e instanceof Error ? e.message : e);
+  }
 
   const outcome = await syncLink(link.id, "LINK");
   return { link, outcome };

@@ -36,7 +36,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     LOCKED_HIGH: a.code === "LOCKED_HIGH" ? `Træningen er for ratings ${formatBand(a.min, a.max, a.exclusive)}. Din rating er ${formatRating(a.rating)}, så din adgang er flyttet til et højere niveau.` : "",
     NOT_ON_ROSTER: "Holdet har en fast deltagerliste efter alder og færdigheder. Kontakt træneren, hvis du (eller dit barn) skal på holdet.",
     DUPR_NEEDED: "Kampene registreres i DUPR, så du skal have koblet din DUPR-profil til for at tilmelde dig.",
-    VERIFY_NEEDED: "Du skal have en verificeret og opdateret DUPR-rating for at booke. Kobl eller synkronisér DUPR på din profil.",
+    VERIFY_NEEDED:
+      a.code === "VERIFY_NEEDED" && a.reason === "RESTRICTED"
+        ? "DUPR har begrænset din konto, så du kan ikke booke ratede træninger lige nu. Kontakt DUPR's support for at få den åbnet."
+        : "Du skal have en verificeret og opdateret DUPR-rating for at booke. Kobl eller synkronisér DUPR på din profil.",
     BOOKED: a.code === "BOOKED" && a.flagged ? "Du er booket. Din rating ligger nu uden for træningens niveau; din plads er bevaret, og træneren er orienteret." : "Du er booket. Vi ses på banen!",
     OFFERED: a.code === "OFFERED" ? `En plads er blevet ledig til dig. Accepter senest ${formatDateTime(a.expiresAt)}, ellers går den videre.` : "",
     WAITLISTED: a.code === "WAITLISTED" ? `Du er nr. ${a.position} på ventelisten. Vi giver besked, hvis der bliver en plads til dig.` : "",

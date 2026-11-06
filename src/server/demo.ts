@@ -170,12 +170,20 @@ export async function ensureDemoSessions(
   people?: { admin: { id: string }; anna: { id: string; role: "MEMBER" | "ADMIN" }; mads: { id: string; role: "MEMBER" | "ADMIN" }; emmaId: string },
 ) {
   if (!devToolsAllowed()) return 0;
-  const topped = await topUpLevels(now);
+  // The full plan (with bookings and waitlists) goes in first; topping up levels comes after.
+  const created = await ensurePlannedSessions(now, people);
+  return created + (await topUpLevels(now));
+}
+
+async function ensurePlannedSessions(
+  now: Date,
+  people?: { admin: { id: string }; anna: { id: string; role: "MEMBER" | "ADMIN" }; mads: { id: string; role: "MEMBER" | "ADMIN" }; emmaId: string },
+) {
   const [{ n }] = await db
     .select({ n: count() })
     .from(trainingSession)
     .where(and(eq(trainingSession.isDemo, true), eq(trainingSession.status, "PUBLISHED"), gt(trainingSession.startsAt, new Date(now.getTime() + 2 * DAY))));
-  if (Number(n) >= 4) return topped;
+  if (Number(n) >= 4) return 0;
 
   const levels = await db.select().from(trainingLevel);
   const L = (name: string) => levels.find((l) => l.name === name) ?? levels.find((l) => l.kind === "SOCIAL") ?? null;

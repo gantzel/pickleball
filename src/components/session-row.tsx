@@ -12,7 +12,7 @@ function explain(v: MemberSessionView): string | null {
   const a = v.availability;
   if (a.code === "LOCKED_LOW") return "Åbner automatisk, når din verificerede rating når grænsen.";
   if (a.code === "LOCKED_HIGH") return "Din rating er over holdets niveau — se træningerne på dit nye niveau.";
-  if (a.code === "VERIFY_NEEDED") return "Kobl eller synkronisér DUPR på din profil.";
+  if (a.code === "VERIFY_NEEDED") return a.reason === "RESTRICTED" ? "Din DUPR-konto er begrænset af DUPR." : "Kobl eller synkronisér DUPR på din profil.";
   if (a.code === "DUPR_NEEDED") return "Kobl din DUPR-profil til, så dine kampe kan registreres.";
   if (a.code === "NOT_ON_ROSTER") return "Holdet har en fast deltagerliste. Kontakt træneren.";
   if (a.code === "OFFERED") return "Accepter inden fristen, ellers går pladsen videre.";

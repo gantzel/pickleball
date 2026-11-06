@@ -49,5 +49,6 @@ export function integrationStatus() {
     label: p?.label ?? null,
     isMock: p?.key === "MOCK",
     liveReady: duprPartnerProvider.isReady(),
+    duprEnv: e.DUPR_ENV,
   };
 }

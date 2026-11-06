@@ -7,6 +7,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "@/db";
 import { duprLink, duprSyncLog, ratingSnapshot, type DuprLink } from "@/db/schema";
 import { DomainError } from "@/lib/errors";
+import { open, seal } from "@/lib/secretbox";
 import type { Actor } from "../actor";
 import { requireAdmin } from "../actor";
 import { audit } from "../audit";
@@ -18,6 +19,8 @@ import { applyRatingEffects } from "../rating-effects";
 import { getSettings } from "../settings";
 import { providerFor } from "./provider";
 import { ProviderError, type ProviderRating } from "./types";
+
+const ACCESS_RECHECK_MS = 24 * 3600_000;
 
 type Trigger = "LINK" | "SCHEDULED" | "MANUAL" | "WEBHOOK" | "ADMIN_RETRY";
 
@@ -80,6 +83,31 @@ export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOu
     return { result: "REVOKED", changed: false };
   }
 
+  // DUPR user gating: re-check the member's entitlements at most every 24 hours.
+  let restricted = link.status === "RESTRICTED";
+  if (provider.checkAccess && link.refreshTokenEnc && (!link.accessCheckedAt || now.getTime() - link.accessCheckedAt.getTime() >= ACCESS_RECHECK_MS)) {
+    const accessToken = open(link.accessTokenEnc);
+    const refreshToken = open(link.refreshTokenEnc);
+    try {
+      if (!accessToken || !refreshToken) throw new ProviderError("REVOKED", "Stored DUPR tokens are unreadable");
+      const check = await provider.checkAccess({ accessToken, refreshToken });
+      restricted = check.restricted;
+      await db
+        .update(duprLink)
+        .set({
+          accessTokenEnc: seal(check.credentials.accessToken),
+          refreshTokenEnc: seal(check.credentials.refreshToken),
+          accessCheckedAt: now,
+          status: restricted ? "RESTRICTED" : link.status === "RESTRICTED" ? "ACTIVE" : link.status,
+        })
+        .where(eq(duprLink.id, link.id));
+    } catch (err) {
+      // Dead tokens mean the member must log in with DUPR again; anything else is retried next time.
+      if (err instanceof ProviderError && err.kind === "REVOKED") return handleFailure(link, err, trigger, now, log);
+      console.warn("[dupr] access check failed", err instanceof Error ? err.message : err);
+    }
+  }
+
   let fetched: ProviderRating;
   try {
     const raw = await provider.getRating(link.externalId);
@@ -98,7 +126,7 @@ export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOu
       .set({
         doublesRating: fetched.doubles,
         singlesRating: fetched.singles,
-        status: "ACTIVE",
+        status: restricted ? "RESTRICTED" : "ACTIVE",
         lastSyncAttemptAt: now,
         lastSuccessfulSyncAt: now,
         lastError: null,
@@ -208,7 +236,7 @@ export async function runScheduledSync(limit = 50, now = new Date()) {
   const due = await db
     .select({ id: duprLink.id, provider: duprLink.provider })
     .from(duprLink)
-    .where(and(inArray(duprLink.status, ["ACTIVE", "ERROR"]), or(isNull(duprLink.nextSyncAfter), lte(duprLink.nextSyncAfter, now))))
+    .where(and(inArray(duprLink.status, ["ACTIVE", "ERROR", "RESTRICTED"]), or(isNull(duprLink.nextSyncAfter), lte(duprLink.nextSyncAfter, now))))
     .orderBy(asc(duprLink.nextSyncAfter))
     .limit(limit);
   const results: Record<string, number> = {};

@@ -7,6 +7,7 @@ import { removeLevelImage, setLevelImage, setMembership, addToRoster, applyStand
 import { adminCancelBooking, adminSetAttendance } from "@/server/bookings";
 import { requireAdminUser, toActor } from "@/server/current-user";
 import { adminRetrySync } from "@/server/dupr/sync";
+import { setUpDuprWebhooks } from "@/server/dupr/webhooks";
 import { cancelSession, completeSession, createSession, duplicateSession, publishSession, updateSession } from "@/server/sessions";
 
 const SESSION_FIELDS = [
@@ -167,5 +168,15 @@ export async function levelImageAction(_prev: ActionResult | null, form: FormDat
     await setLevelImage(actor, levelId, Buffer.from(await file.arrayBuffer()));
   }, form.get("remove") === "1" ? "Billedet er fjernet." : "Billedet er gemt.");
   refreshAdmin();
+  return res as ActionResult;
+}
+
+export async function setUpDuprWebhooksAction(): Promise<ActionResult> {
+  const actor = toActor(await requireAdminUser());
+  const res = await toActionResult(() => setUpDuprWebhooks(actor));
+  if (res.ok) {
+    const d = res.data as { url: string; subscribed: number };
+    return { ok: true, message: `Webhook registreret (${d.url}). ${d.subscribed} medlem(mer) abonneret.` };
+  }
   return res as ActionResult;
 }

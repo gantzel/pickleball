@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { levelImageAction, setMembershipAction, addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
+import { levelImageAction, setMembershipAction, addToRosterAction, applyStandardStructureAction, rosterCandidatesAction, testSessionsAction, setRoleAction, bookingAdminAction, deleteLevelAction, removeFromRosterAction, retrySyncAction, setUpDuprWebhooksAction, saveLevelAction, saveSessionAction, saveSettingsAction, sessionCommandAction } from "@/app/actions/admin";
 import { formatBand } from "@/lib/format";
 import { ProgrammeCover } from "@/components/programme-cover";
 import { FormMessage } from "@/components/form-message";
@@ -588,6 +588,19 @@ export function LevelImageForm({ levelId, imageKey, color }: { levelId: string; 
           <FormMessage state={state} />
         </div>
       </form>
+    </div>
+  );
+}
+
+export function DuprWebhookButton() {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionResult | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button className="btn btn-secondary text-sm" disabled={pending} onClick={() => start(async () => setState(await setUpDuprWebhooksAction()))}>
+        {pending ? "Registrerer…" : "Registrér webhook hos DUPR"}
+      </button>
+      {state && <span role="status" className={`text-sm ${state.ok ? "text-court" : "text-alert"}`}>{state.message}</span>}
     </div>
   );
 }

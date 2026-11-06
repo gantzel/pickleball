@@ -59,8 +59,11 @@ export async function AppShell({ user, children }: { user: CurrentUser; children
       <main id="indhold" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         {children}
       </main>
-      <footer className="mx-auto hidden w-full max-w-6xl px-6 pb-8 text-sm text-muted md:block">
-        <Link href="/privatliv" className="link">Privatliv og data</Link>
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-28 text-sm text-muted sm:px-6 md:pb-8">
+        <nav aria-label="Om sitet" className="flex flex-wrap gap-x-5 gap-y-1">
+          <Link href="/kontakt" className="link">Kontakt og support</Link>
+          <Link href="/privatliv" className="link">Privatliv og data</Link>
+        </nav>
       </footer>
       <Toaster />
       <BottomNav items={items.slice(0, 5)} />

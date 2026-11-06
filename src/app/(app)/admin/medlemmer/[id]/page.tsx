@@ -49,7 +49,7 @@ export default async function Member({ params }: { params: Promise<{ id: string 
           <>
             <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
               <div><dt className="text-muted">DUPR-ID</dt><dd className="num">{l.externalId} ({l.provider === "MOCK" ? "mock" : "DUPR"})</dd></div>
-              <div><dt className="text-muted">Status</dt><dd>{{ ACTIVE: "Aktiv", ERROR: "Fejl ved seneste synk", REVOKED: "Tilbagekaldt" }[l.status]}</dd></div>
+              <div><dt className="text-muted">Status</dt><dd>{{ ACTIVE: "Aktiv", ERROR: "Fejl ved seneste synk", REVOKED: "Tilbagekaldt", RESTRICTED: "Begrænset af DUPR" }[l.status]}</dd></div>
               <div><dt className="text-muted">Double / single</dt><dd className="num">{formatRating(l.doublesRating)} / {formatRating(l.singlesRating)}</dd></div>
               <div><dt className="text-muted">Senest synkroniseret</dt><dd>{l.lastSuccessfulSyncAt ? formatDateTime(l.lastSuccessfulSyncAt) : "Aldrig"}</dd></div>
             </dl>

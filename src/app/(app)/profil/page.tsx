@@ -127,6 +127,9 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
             </form>
           </>
         )}
+        <p className="text-sm text-muted">
+          Problemer med DUPR-forbindelsen, din rating eller en kamp? <Link href="/kontakt" className="link">Kontakt klubbens support</Link>.
+        </p>
       </section>
 
       <section id="boern" aria-labelledby="kids-h" className="panel scroll-mt-24 space-y-4 p-5 sm:p-6">

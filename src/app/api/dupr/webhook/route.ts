@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
   let event;
   try {
-    event = await provider.parseWebhook(raw, req.headers);
+    event = await provider.parseWebhook(raw, req.headers, new URL(req.url));
   } catch (e) {
     if (e instanceof ProviderError && e.kind === "INVALID") return NextResponse.json({ error: "invalid" }, { status: 401 });
     if (e instanceof ProviderError && e.kind === "UNAVAILABLE") return NextResponse.json({ error: "unavailable" }, { status: 503 });

@@ -18,10 +18,15 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
-  DUPR_API_BASE_URL: z.string().url().optional(),
+  /** Which DUPR environment the partner keys belong to: uat (testing) or production. */
+  DUPR_ENV: z.enum(["uat", "production"]).default("uat"),
+  DUPR_CLIENT_ID: z.string().optional(),
   DUPR_CLIENT_KEY: z.string().optional(),
   DUPR_CLIENT_SECRET: z.string().optional(),
+  /** Random secret we put in the webhook URL we register with DUPR (DUPR does not sign webhooks). */
   DUPR_WEBHOOK_SECRET: z.string().optional(),
+  /** Shown to members as the club's support contact (DUPR requires one). */
+  SUPPORT_EMAIL: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
 
   CRON_SECRET: z.string().min(12).optional(),
   /** db = in PostgreSQL; local = UPLOAD_DIR on disk (needs a persistent disk); s3 = any S3-compatible bucket. */

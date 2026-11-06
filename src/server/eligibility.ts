@@ -32,6 +32,8 @@ export type RatingState =
   | { kind: "NOT_LINKED" }
   | { kind: "INTEGRATION_UNAVAILABLE"; rating: number | null; syncedAt: Date | null }
   | { kind: "REVOKED" }
+  /** DUPR says the member may not take part in play (no BASIC_L1 entitlement). */
+  | { kind: "RESTRICTED" }
   | { kind: "NO_RATING"; syncedAt: Date | null }
   | { kind: "STALE"; rating: number | null; syncedAt: Date | null };
 
@@ -58,6 +60,7 @@ export function computeRatingState(
 
   if (!isProviderActive(link.provider)) return { kind: "INTEGRATION_UNAVAILABLE", rating, syncedAt };
   if (link.status === "REVOKED") return { kind: "REVOKED" };
+  if (link.status === "RESTRICTED") return { kind: "RESTRICTED" };
 
   const staleMs = settings.staleAfterDays * 24 * 3600 * 1000;
   const fresh = syncedAt !== null && now.getTime() - syncedAt.getTime() <= staleMs;
@@ -161,6 +164,8 @@ export function ratingStateMessage(s: RatingState): string {
       return "DUPR-forbindelsen er ikke aktiv lige nu, så ratings kan ikke verificeres.";
     case "REVOKED":
       return "Adgangen til din DUPR-profil er tilbagekaldt. Kobl den til igen.";
+    case "RESTRICTED":
+      return "DUPR har begrænset din konto, så den ikke kan bruges til ratede træninger lige nu. Kontakt DUPR's support for at få den åbnet.";
     case "NO_RATING":
       return "DUPR har endnu ingen rating for dig. Spil registrerede kampe for at få en rating.";
     case "STALE":
