@@ -287,5 +287,5 @@ export async function registerDuprWebhook(): Promise<string> {
   const hook = new URL(`/api/dupr/webhook/${encodeURIComponent(e.DUPR_WEBHOOK_SECRET)}`, e.APP_URL).toString();
   const res = await partner("/v1.0/webhook", { method: "POST", body: JSON.stringify({ webhookUrl: hook, topics: ["RATING"] }) }, "register webhook");
   if (!res.ok) throw await withDuprMessage(res, "register webhook");
-  return new URL("/api/dupr/webhook/•••", e.APP_URL).toString();
+  return `${new URL("/api/dupr/webhook/", e.APP_URL).toString()}•••`;
 }
