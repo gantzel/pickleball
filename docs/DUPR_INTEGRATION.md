@@ -45,9 +45,9 @@ Switching from mock to live makes mock links show as "not verifiable" until memb
 - [x] Support contact for members: `/kontakt`, linked in the footer and the DUPR section of the profile.
 - [ ] Match upload: not used (training platform, no match results).
 - [ ] Club integration: not used yet.
-- [ ] Tested end to end on UAT with DUPR's 4 test accounts.
+- [x] Tested on UAT (9 Nov 2026): SSO link, identity check, entitlements, rating fetch (NR), subscribe, webhook handshake. RATING_SEED not yet observed.
 - [ ] Review request to tech@mydupr.com (Client ID in the subject): platform URL, test accounts, compliance summary with test steps. Review takes up to 10 business days.
 
 ## Club
 
-DUPR club **Pickleball Denmark**, Copenhagen, club ID **4826145949**. DUPR contacts: tech@mydupr.com (API), clubs@mydupr.com, support@mydupr.com.
+DUPR club **Pickleball Denmark**, Copenhagen, club ID **4826145949** (production). UAT test club: ID **6950184363** (uat.dupr.gg/dashboard/browse/clubs/6950184363), director = UAT test account 1; club admin needs a password reset and MFA first. The platform does not use DUPR clubs yet. DUPR contacts: tech@mydupr.com (API), clubs@mydupr.com, support@mydupr.com.
