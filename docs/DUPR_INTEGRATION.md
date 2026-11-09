@@ -17,7 +17,7 @@ No part of the app scrapes DUPR, asks for a member's DUPR password, or accepts a
 
 Hosts: UAT partner `https://uat.mydupr.com/api`, public `https://api.uat.dupr.gg`, SSO `https://uat.dupr.gg`. Production partner `https://prod.mydupr.com/api`, public `https://api.dupr.gg`, SSO `https://dashboard.dupr.com`. Chosen by `DUPR_ENV`.
 
-**Webhooks are not signed by DUPR.** The URL we register carries our own secret (`?key=DUPR_WEBHOOK_SECRET`), webhooks for another `clientId` are rejected, and the rating in the payload is never used: it only tells us whose rating to fetch again.
+**Webhooks are not signed by DUPR.** The URL we register carries our own secret as its last path segment (`/api/dupr/webhook/<DUPR_WEBHOOK_SECRET>`; `?key=` also works), answers DUPR’s registration handshake (GET or POST) with 200, webhooks for another `clientId` are rejected, and the rating in the payload is never used: it only tells us whose rating to fetch again.
 
 Member tokens are read-only and stored AES-256-GCM encrypted (`src/lib/secretbox.ts`, key derived from `BETTER_AUTH_SECRET`). Our own failing keys never revoke members (401 on partner calls → retry later); a 403 on a member's rating, or dead member tokens, mark the link `REVOKED` and ask the member to connect again.
 

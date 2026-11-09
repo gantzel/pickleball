@@ -59,6 +59,21 @@ function errorFor(res: Response, what: string): ProviderError {
   }
 }
 
+/** Like errorFor, with DUPR's own explanation appended (their error bodies carry a message). */
+async function withDuprMessage(res: Response, what: string): Promise<ProviderError> {
+  const err = errorFor(res, what);
+  try {
+    const text = (await res.text()).slice(0, 2000);
+    let msg = text;
+    try {
+      const j = JSON.parse(text) as { message?: unknown; errors?: unknown };
+      msg = [j.message, j.errors].filter(Boolean).map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" ") || text;
+    } catch {}
+    if (msg.trim()) err.message = `${err.message}: ${msg.trim().slice(0, 300)}`;
+  } catch {}
+  return err;
+}
+
 async function call(url: string, init: RequestInit, what: string): Promise<Response> {
   try {
     return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS), cache: "no-store" });
@@ -226,7 +241,7 @@ export const duprPartnerProvider: RatingProvider = {
   async subscribe(externalIds) {
     if (!externalIds.length) return;
     const res = await partner("/user/v1.0/subscribe/webhook-event", { method: "POST", body: JSON.stringify({ duprIds: externalIds, topic: "RATING" }) }, "subscribe");
-    if (!res.ok) throw errorFor(res, "subscribe");
+    if (!res.ok) throw await withDuprMessage(res, "subscribe");
   },
 
   async revoke(externalId) {
@@ -237,20 +252,23 @@ export const duprPartnerProvider: RatingProvider = {
   async parseWebhook(rawBody, _headers, url): Promise<WebhookEvent> {
     const e = env();
     const secret = e.DUPR_WEBHOOK_SECRET;
-    const given = url.searchParams.get("key") ?? "";
+    const given = url.searchParams.get("key") ?? decodeURIComponent(url.pathname.split("/").pop() ?? "");
     if (!secret || !safeEqual(given, secret)) throw new ProviderError("INVALID", "Wrong webhook key");
+    // From here on the caller is DUPR (it knows our secret). Anything we can't use —
+    // DUPR's registration handshake, another client's event, an unknown shape —
+    // is acknowledged with 200 and simply triggers nothing.
+    const eventId = createHash("sha256").update(rawBody).digest("hex");
     let body: unknown;
     try {
       body = JSON.parse(rawBody);
     } catch {
-      throw new ProviderError("INVALID", "Invalid JSON");
+      return { eventId, externalIds: [] };
     }
     const envelopes = (Array.isArray(body) ? body : [body]) as { clientId?: unknown; event?: unknown; message?: unknown }[];
     const ids = new Set<string>();
     for (const env_ of envelopes) {
-      if (e.DUPR_CLIENT_ID && env_.clientId !== undefined && String(env_.clientId) !== e.DUPR_CLIENT_ID) {
-        throw new ProviderError("INVALID", "Webhook for another client");
-      }
+      if (!env_ || typeof env_ !== "object") continue;
+      if (e.DUPR_CLIENT_ID && env_.clientId !== undefined && env_.clientId !== null && String(env_.clientId) !== e.DUPR_CLIENT_ID) continue;
       const messages = Array.isArray(env_.message) ? env_.message : [env_.message];
       for (const m of messages) {
         const id = (m as { duprId?: unknown } | null)?.duprId;
@@ -258,7 +276,7 @@ export const duprPartnerProvider: RatingProvider = {
       }
     }
     // DUPR events carry no id: dedupe on the exact payload.
-    return { eventId: createHash("sha256").update(rawBody).digest("hex"), externalIds: [...ids].slice(0, 500) };
+    return { eventId, externalIds: [...ids].slice(0, 500) };
   },
 };
 
@@ -266,10 +284,8 @@ export const duprPartnerProvider: RatingProvider = {
 export async function registerDuprWebhook(): Promise<string> {
   const e = env();
   if (!e.DUPR_WEBHOOK_SECRET) throw new ProviderError("INVALID", "DUPR_WEBHOOK_SECRET is not set");
-  const hook = new URL("/api/dupr/webhook", e.APP_URL);
-  hook.searchParams.set("key", e.DUPR_WEBHOOK_SECRET);
-  const res = await partner("/v1.0/webhook", { method: "POST", body: JSON.stringify({ webhookUrl: hook.toString(), topics: ["RATING"] }) }, "register webhook");
-  if (!res.ok) throw errorFor(res, "register webhook");
-  hook.searchParams.set("key", "•••");
-  return hook.toString();
+  const hook = new URL(`/api/dupr/webhook/${encodeURIComponent(e.DUPR_WEBHOOK_SECRET)}`, e.APP_URL).toString();
+  const res = await partner("/v1.0/webhook", { method: "POST", body: JSON.stringify({ webhookUrl: hook, topics: ["RATING"] }) }, "register webhook");
+  if (!res.ok) throw await withDuprMessage(res, "register webhook");
+  return new URL("/api/dupr/webhook/•••", e.APP_URL).toString();
 }

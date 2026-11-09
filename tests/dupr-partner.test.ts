@@ -204,9 +204,15 @@ describe("DUPR partner provider", () => {
     const body = JSON.stringify({ clientId: "5787", event: "RATING", message: { duprId: "WH1234", rating: { doubles: "7.9" } } });
     const bad = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook?key=nope", { method: "POST", body }));
     expect(bad.status).toBe(401);
+    // Another client's event, or DUPR's registration handshake: acknowledged, nothing synced.
     const otherClient = JSON.stringify({ clientId: "999", event: "RATING", message: { duprId: "WH1234" } });
-    expect((await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook?key=test-webhook-secret", { method: "POST", body: otherClient }))).status).toBe(401);
-    const ok = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook?key=test-webhook-secret", { method: "POST", body }));
+    const r1 = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook/test-webhook-secret", { method: "POST", body: otherClient }));
+    expect(await r1.json()).toMatchObject({ ok: true, synced: 0 });
+    const r2 = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook/test-webhook-secret", { method: "POST", body: "ping" }));
+    expect(r2.status).toBe(200);
+    expect((await getLink(m.id)).doublesRating).toBe(3.1);
+    // The secret can be the last path segment (as registered) or ?key=.
+    const ok = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook/test-webhook-secret", { method: "POST", body }));
     expect(await ok.json()).toMatchObject({ ok: true, synced: 1 });
     expect((await getLink(m.id)).doublesRating).toBe(3.25);
   });

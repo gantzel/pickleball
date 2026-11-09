@@ -13,6 +13,11 @@ export const dynamic = "force-dynamic";
  * refresh; ratings are always re-fetched from the provider API, so a forged
  * or replayed payload can never set a rating.
  */
+/** DUPR checks that the URL answers before it accepts the registration. */
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: Request) {
   const provider = activeProvider();
   if (!provider) return NextResponse.json({ error: "integration_unavailable" }, { status: 503 });
