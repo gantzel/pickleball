@@ -78,8 +78,8 @@ export async function completeLink(actor: Actor, params: URLSearchParams) {
   }
 
   const tokens = identity.credentials
-    ? { accessTokenEnc: seal(identity.credentials.accessToken), refreshTokenEnc: seal(identity.credentials.refreshToken), accessCheckedAt: now }
-    : { accessTokenEnc: null, refreshTokenEnc: null, accessCheckedAt: null };
+    ? { accessTokenEnc: seal(identity.credentials.accessToken), refreshTokenEnc: seal(identity.credentials.refreshToken), accessCheckedAt: now, premium: identity.premium ?? false }
+    : { accessTokenEnc: null, refreshTokenEnc: null, accessCheckedAt: null, premium: false };
   const status = identity.restricted ? ("RESTRICTED" as const) : ("ACTIVE" as const);
   const [link] = await db
     .insert(duprLink)

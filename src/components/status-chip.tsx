@@ -26,6 +26,8 @@ export function availabilityLabel(a: Availability): { label: string; tone: Tone 
       return { label: "Kun holdets deltagere", tone: "lock" };
     case "DUPR_NEEDED":
       return { label: "Kræver DUPR-profil", tone: "alert" };
+    case "PREMIUM_NEEDED":
+      return { label: "Kræver DUPR+", tone: "lock" };
     case "MEMBERSHIP":
       return { label: a.state === "PENDING" ? "Afventer godkendelse" : a.state === "LAPSED" ? "Kontingent udløbet" : "Ikke medlem", tone: "lock" };
     case "NOT_FOR_CHILDREN":

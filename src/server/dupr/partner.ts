@@ -155,17 +155,18 @@ async function basicInfo(accessToken: string) {
   return { duprId: first.duprId, name: typeof first.fullName === "string" && first.fullName.trim() ? first.fullName.trim() : null };
 }
 
-/** True unless DUPR says the member lacks BASIC_L1 (restricted or banned). */
-async function isRestricted(accessToken: string): Promise<boolean> {
+/** The member's DUPR entitlements: BASIC_L1 (may play at all) and PREMIUM_L1 (DUPR+). */
+async function entitlements(accessToken: string): Promise<{ restricted: boolean; premium: boolean }> {
   const res = await member("/subscription/active", accessToken, { method: "POST" }, "entitlements");
   if (!res.ok) throw memberError(res, "entitlements");
   const body = await json(res, "entitlements");
   const subs = Array.isArray(body.subscriptions) ? body.subscriptions : Array.isArray((body.result as { subscriptions?: unknown })?.subscriptions) ? ((body.result as { subscriptions: unknown[] }).subscriptions) : [];
-  const basic = subs.some((s) => {
-    const ent = (s as { entitlements?: Record<string, unknown> }).entitlements ?? {};
-    return Object.values(ent).some((list) => Array.isArray(list) && list.includes("BASIC_L1"));
-  });
-  return !basic;
+  const all = new Set<string>();
+  for (const sub of subs) {
+    const ent = (sub as { entitlements?: Record<string, unknown> }).entitlements ?? {};
+    for (const list of Object.values(ent)) if (Array.isArray(list)) for (const e of list) if (typeof e === "string") all.add(e);
+  }
+  return { restricted: !all.has("BASIC_L1"), premium: all.has("PREMIUM_L1") };
 }
 
 async function refresh(c: MemberCredentials): Promise<MemberCredentials> {
@@ -188,6 +189,8 @@ const safeEqual = (a: string, b: string) => {
 export const duprPartnerProvider: RatingProvider = {
   key: "DUPR",
   label: "DUPR",
+  // DUPR: fetch once at link time, then keep ratings current only via the RATING webhook.
+  ratingsByWebhookOnly: true,
 
   isReady() {
     const e = env();
@@ -214,14 +217,14 @@ export const duprPartnerProvider: RatingProvider = {
     // Ask DUPR whose token this is; a posted DUPR ID alone proves nothing.
     const info = await basicInfo(accessToken);
     if (claimed && claimed.toUpperCase() !== info.duprId.toUpperCase()) throw new ProviderError("INVALID", "DUPR ID does not match the token");
-    const restricted = await isRestricted(accessToken);
-    return { externalId: info.duprId, displayName: info.name, credentials: { accessToken, refreshToken }, restricted };
+    const ent = await entitlements(accessToken);
+    return { externalId: info.duprId, displayName: info.name, credentials: { accessToken, refreshToken }, ...ent };
   },
 
   async checkAccess(credentials): Promise<AccessCheck> {
     // Refreshing rotates both tokens and keeps the refresh token from expiring.
     const fresh = await refresh(credentials);
-    return { restricted: await isRestricted(fresh.accessToken), credentials: fresh };
+    return { ...(await entitlements(fresh.accessToken)), credentials: fresh };
   },
 
   async getRating(externalId): Promise<ProviderRating> {
@@ -266,17 +269,24 @@ export const duprPartnerProvider: RatingProvider = {
     }
     const envelopes = (Array.isArray(body) ? body : [body]) as { clientId?: unknown; event?: unknown; message?: unknown }[];
     const ids = new Set<string>();
+    const ratings: Record<string, ProviderRating> = {};
     for (const env_ of envelopes) {
       if (!env_ || typeof env_ !== "object") continue;
       if (e.DUPR_CLIENT_ID && env_.clientId !== undefined && env_.clientId !== null && String(env_.clientId) !== e.DUPR_CLIENT_ID) continue;
       const messages = Array.isArray(env_.message) ? env_.message : [env_.message];
       for (const m of messages) {
-        const id = (m as { duprId?: unknown } | null)?.duprId;
-        if (typeof id === "string" && id) ids.add(id);
+        const msg = m as { duprId?: unknown; rating?: { doubles?: unknown; singles?: unknown } | null } | null;
+        const id = msg?.duprId;
+        if (typeof id !== "string" || !id) continue;
+        ids.add(id);
+        // RATING and RATING_SEED carry the player's current rating; null means not rated yet.
+        if (msg && "rating" in msg) {
+          ratings[id] = msg.rating ? { doubles: parseDuprRating(msg.rating.doubles), singles: parseDuprRating(msg.rating.singles) } : { doubles: null, singles: null };
+        }
       }
     }
     // DUPR events carry no id: dedupe on the exact payload.
-    return { eventId, externalIds: [...ids].slice(0, 500) };
+    return { eventId, externalIds: [...ids].slice(0, 500), ratings };
   },
 };
 

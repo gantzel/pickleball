@@ -35,13 +35,18 @@ const LevelInput = z
       .union([z.boolean(), z.literal("on"), z.literal("true"), z.literal("")])
       .optional()
       .transform((v) => v === true || v === "on" || v === "true"),
+    requiresDuprPremium: z
+      .union([z.boolean(), z.literal("on"), z.literal("true"), z.literal("")])
+      .optional()
+      .transform((v) => v === true || v === "on" || v === "true"),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Farve skal være en hex-kode som #2f6b4f"),
     sortOrder: z.coerce.number().int().min(0).max(1000).default(0),
   })
-  .transform((v) =>
-    // Only rating levels have a band; other programmes ignore rating fields.
-    v.kind === "LEVEL" ? v : { ...v, minRating: null, maxRating: null, allowUnrated: false },
-  )
+  .transform((v) => {
+    // Only rating levels have a band; other programmes ignore rating fields. Children's rosters never need DUPR+.
+    const w = v.kind === "LEVEL" ? v : { ...v, minRating: null, maxRating: null, allowUnrated: false };
+    return v.kind === "JUNIOR" ? { ...w, requiresDuprPremium: false } : w;
+  })
   .refine((v) => v.kind !== "LEVEL" || v.minRating !== null || v.maxRating !== null, {
     message: "Et ratingniveau skal have en nedre eller øvre grænse",
     path: ["minRating"],

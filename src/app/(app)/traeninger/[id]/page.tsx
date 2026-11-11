@@ -11,7 +11,7 @@ import { getSettings } from "@/server/settings";
 
 /** For children, "verify DUPR" makes no sense: they can't book rating programmes. */
 function childAvailability(a: Availability): Availability {
-  return a.code === "VERIFY_NEEDED" || a.code === "DUPR_NEEDED" || a.code === "LOCKED_LOW" || a.code === "LOCKED_HIGH" ? { code: "NOT_FOR_CHILDREN" } : a;
+  return a.code === "VERIFY_NEEDED" || a.code === "DUPR_NEEDED" || a.code === "PREMIUM_NEEDED" || a.code === "LOCKED_LOW" || a.code === "LOCKED_HIGH" ? { code: "NOT_FOR_CHILDREN" } : a;
 }
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
@@ -35,7 +35,10 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     LOCKED_LOW: a.code === "LOCKED_LOW" ? `Træningen kræver mindst ${formatRating(a.min)}. Din rating er ${formatRating(a.rating)}, så du mangler ${formatRating(a.min - a.rating)}.` : "",
     LOCKED_HIGH: a.code === "LOCKED_HIGH" ? `Træningen er for ratings ${formatBand(a.min, a.max, a.exclusive)}. Din rating er ${formatRating(a.rating)}, så din adgang er flyttet til et højere niveau.` : "",
     NOT_ON_ROSTER: "Holdet har en fast deltagerliste efter alder og færdigheder. Kontakt træneren, hvis du (eller dit barn) skal på holdet.",
-    DUPR_NEEDED: "Kampene registreres i DUPR, så du skal have koblet din DUPR-profil til for at tilmelde dig.",
+    DUPR_NEEDED: v.rule.premium
+      ? "Træningen kræver DUPR+, så du skal koble din DUPR-profil til for at tilmelde dig."
+      : "Kampene registreres i DUPR, så du skal have koblet din DUPR-profil til for at tilmelde dig.",
+    PREMIUM_NEEDED: "Træningen er forbeholdt medlemmer med DUPR+ (DUPR's premium-abonnement). Opgraderer du hos DUPR, åbner den automatisk inden for et døgn.",
     VERIFY_NEEDED:
       a.code === "VERIFY_NEEDED" && a.reason === "RESTRICTED"
         ? "DUPR har begrænset din konto, så du kan ikke booke ratede træninger lige nu. Kontakt DUPR's support for at få den åbnet."

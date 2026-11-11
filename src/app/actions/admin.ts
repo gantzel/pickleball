@@ -70,7 +70,7 @@ export async function bookingAdminAction(bookingId: string, command: "cancel" | 
 export async function saveLevelAction(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
   const actor = toActor(await requireAdminUser());
   const id = String(form.get("id") ?? "") || null;
-  const res = await toActionResult(() => saveLevel(actor, id, formToObject(form, ["name", "description", "kind", "minRating", "maxRating", "allowUnrated", "color", "sortOrder"])), "Holdet er gemt.");
+  const res = await toActionResult(() => saveLevel(actor, id, formToObject(form, ["name", "description", "kind", "minRating", "maxRating", "allowUnrated", "requiresDuprPremium", "color", "sortOrder"])), "Holdet er gemt.");
   refreshAdmin();
   return res as ActionResult;
 }

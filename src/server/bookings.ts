@@ -140,8 +140,10 @@ async function assertEligible(tx: Tx, s: Session, userId: string, settings: AppS
     case "VERIFY_NEEDED":
     case "DUPR_NEEDED":
       if (r.reason === "RESTRICTED") throw new DomainError("RATING_UNVERIFIED", "DUPR har begrænset din konto, så du kan ikke booke ratede træninger lige nu. Kontakt DUPR's support.");
-      if (r.code === "DUPR_NEEDED") throw new DomainError("RATING_UNVERIFIED", "Eventet kræver, at din DUPR-profil er koblet til.");
+      if (r.code === "DUPR_NEEDED") throw new DomainError("RATING_UNVERIFIED", "Træningen kræver, at din DUPR-profil er koblet til.");
       throw new DomainError("RATING_UNVERIFIED", "Din DUPR-rating skal være verificeret og opdateret, før du kan booke.");
+    case "PREMIUM_NEEDED":
+      throw new DomainError("NOT_ELIGIBLE", "Træningen kræver DUPR+ (DUPR's premium-abonnement).");
     case "LOCKED_LOW":
       throw new DomainError("NOT_ELIGIBLE", `Træningen kræver en rating på mindst ${formatRating(r.min)}.`);
     case "LOCKED_HIGH":

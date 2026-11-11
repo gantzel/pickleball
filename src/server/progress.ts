@@ -6,7 +6,7 @@ import type { Actor } from "./actor";
 import { describeAchievement, longestWeeklyStreak } from "./achievements";
 import { isProviderActive } from "./dupr/provider";
 import { activeProvider } from "./dupr/provider";
-import { accessRule, computeRatingState, levelProgress, ruleEligibility, sortLevels, type RatingState } from "./eligibility";
+import { accessRule, computeRatingState, levelProgress, ruleEligibility, sortLevels, type RatingState, isPushProvider } from "./eligibility";
 import type { AppSettings } from "@/db/schema";
 import { getSettings } from "./settings";
 
@@ -113,7 +113,7 @@ export async function clubRankFor(userId: string, state: RatingState, settings: 
         eq(duprLink.provider, provider.key),
         sql`${duprLink.status} <> 'REVOKED'`,
         isNotNull(col),
-        gte(duprLink.lastSuccessfulSyncAt, fresh),
+        isPushProvider(provider.key) ? isNotNull(duprLink.lastSuccessfulSyncAt) : gte(duprLink.lastSuccessfulSyncAt, fresh),
       ),
     );
   const total = Number(r?.total ?? 0);

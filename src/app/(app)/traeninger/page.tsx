@@ -15,7 +15,7 @@ const anyone = (v: MemberSessionView, codes: string[]) =>
   codes.includes(v.availability.code) || v.children.some((c) => codes.includes(c.availability.code));
 const BOOKABLE = ["AVAILABLE", "FULL_WAITLIST", "OFFERED"];
 const MINE = ["BOOKED", "WAITLISTED", "OFFERED"];
-const LOCKED = ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED", "NOT_ON_ROSTER", "DUPR_NEEDED"];
+const LOCKED = ["LOCKED_LOW", "LOCKED_HIGH", "VERIFY_NEEDED", "NOT_ON_ROSTER", "DUPR_NEEDED", "PREMIUM_NEEDED"];
 
 const FILTERS = [
   { key: "alle", label: "Alle", test: () => true },

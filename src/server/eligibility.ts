@@ -28,20 +28,29 @@ export type RatingState =
       provider: ProviderKey;
       /** e.g. the latest sync attempt failed but the rating is still within policy */
       warning?: string;
+      /** DUPR+ subscriber (PREMIUM_L1). */
+      premium?: boolean;
     }
   | { kind: "NOT_LINKED" }
   | { kind: "INTEGRATION_UNAVAILABLE"; rating: number | null; syncedAt: Date | null }
   | { kind: "REVOKED" }
   /** DUPR says the member may not take part in play (no BASIC_L1 entitlement). */
   | { kind: "RESTRICTED" }
-  | { kind: "NO_RATING"; syncedAt: Date | null }
-  | { kind: "STALE"; rating: number | null; syncedAt: Date | null };
+  | { kind: "NO_RATING"; syncedAt: Date | null; premium?: boolean }
+  | { kind: "STALE"; rating: number | null; syncedAt: Date | null; premium?: boolean };
 
 export type SettingsLike = Pick<AppSettings, "ratingType" | "staleAfterDays">;
 type LinkLike = Pick<
   DuprLink,
   "provider" | "status" | "doublesRating" | "singlesRating" | "lastSuccessfulSyncAt" | "lastError"
->;
+> & { premium?: boolean };
+
+/**
+ * DUPR's own partner integration keeps ratings current through its RATING
+ * webhook (DUPR asks partners not to poll), so its ratings don't expire with
+ * time. Polled providers (the mock) go stale after `staleAfterDays`.
+ */
+export const isPushProvider = (p: ProviderKey) => p === "DUPR";
 
 export function ratingFromLink(link: Pick<LinkLike, "doublesRating" | "singlesRating">, settings: Pick<SettingsLike, "ratingType">) {
   const v = settings.ratingType === "SINGLES" ? link.singlesRating : link.doublesRating;
@@ -63,18 +72,22 @@ export function computeRatingState(
   if (link.status === "RESTRICTED") return { kind: "RESTRICTED" };
 
   const staleMs = settings.staleAfterDays * 24 * 3600 * 1000;
-  const fresh = syncedAt !== null && now.getTime() - syncedAt.getTime() <= staleMs;
-  if (!fresh) return { kind: "STALE", rating, syncedAt };
-  if (rating === null) return { kind: "NO_RATING", syncedAt };
+  const fresh = syncedAt !== null && (isPushProvider(link.provider) || now.getTime() - syncedAt.getTime() <= staleMs);
+  const premium = link.premium ?? false;
+  if (!fresh) return { kind: "STALE", rating, syncedAt, premium };
+  if (rating === null) return { kind: "NO_RATING", syncedAt, premium };
 
   return {
     kind: "VERIFIED",
     rating,
     syncedAt: syncedAt!,
     provider: link.provider,
+    premium,
     warning:
       link.status === "ERROR"
-        ? "Seneste synkronisering med DUPR fejlede. Din rating er stadig gyldig, indtil den bliver forældet."
+        ? isPushProvider(link.provider)
+          ? "Seneste kontakt med DUPR fejlede. Din rating er stadig gyldig."
+          : "Seneste synkronisering med DUPR fejlede. Din rating er stadig gyldig, indtil den bliver forældet."
         : undefined,
   };
 }
@@ -89,18 +102,28 @@ export function inSessionRange(rating: number, min: number | null, max: number |
 
 // ─── Access rules ────────────────────────────────────────────────────────────
 
-export type AccessRule =
+export type AccessRule = (
   | { kind: "OPEN" }
   | { kind: "RATING"; min: number | null; max: number | null; maxExclusive: boolean; allowUnrated: boolean }
   | { kind: "ROSTER" }
-  | { kind: "DUPR_LINKED" };
+  | { kind: "DUPR_LINKED" }
+) & {
+  /** Also requires DUPR+ (PREMIUM_L1). */
+  premium?: boolean;
+};
 
-export type LevelForRule = Pick<TrainingLevel, "kind" | "minRating" | "maxRating" | "allowUnrated">;
+export type LevelForRule = Pick<TrainingLevel, "kind" | "minRating" | "maxRating" | "allowUnrated"> & { requiresDuprPremium?: boolean };
 
 export function accessRule(
   session: Pick<TrainingSession, "minRating" | "maxRating">,
   level: LevelForRule | null | undefined,
 ): AccessRule {
+  const rule = baseRule(session, level);
+  // Children can't have DUPR accounts, so DUPR+ never applies to roster programmes.
+  return level?.requiresDuprPremium && rule.kind !== "ROSTER" ? { ...rule, premium: true } : rule;
+}
+
+function baseRule(session: Pick<TrainingSession, "minRating" | "maxRating">, level: LevelForRule | null | undefined): AccessRule {
   if (level?.kind === "LEVEL") {
     return { kind: "RATING", min: level.minRating, max: level.maxRating, maxExclusive: true, allowUnrated: level.allowUnrated };
   }
@@ -128,9 +151,17 @@ export type AccessResult =
   | { code: "LOCKED_LOW"; min: number; rating: number }
   | { code: "LOCKED_HIGH"; min: number | null; max: number; rating: number; exclusive: boolean }
   | { code: "NOT_ON_ROSTER" }
-  | { code: "DUPR_NEEDED"; reason: RatingState["kind"] };
+  | { code: "DUPR_NEEDED"; reason: RatingState["kind"] }
+  | { code: "PREMIUM_NEEDED" };
 
 export function ruleEligibility(rule: AccessRule, state: RatingState, onRoster = false): AccessResult {
+  const base = baseEligibility(rule, state, onRoster);
+  if (base.code !== "ELIGIBLE" || !rule.premium) return base;
+  if (!LINKED_KINDS.includes(state.kind)) return { code: "DUPR_NEEDED", reason: state.kind };
+  return "premium" in state && state.premium ? base : { code: "PREMIUM_NEEDED" };
+}
+
+function baseEligibility(rule: AccessRule, state: RatingState, onRoster: boolean): AccessResult {
   switch (rule.kind) {
     case "OPEN":
       return { code: "ELIGIBLE" };
@@ -186,6 +217,7 @@ export type Availability =
   | { code: "VERIFY_NEEDED"; reason: RatingState["kind"] }
   | { code: "NOT_ON_ROSTER" }
   | { code: "DUPR_NEEDED"; reason: RatingState["kind"] }
+  | { code: "PREMIUM_NEEDED" }
   | { code: "NOT_FOR_CHILDREN" }
   | { code: "MEMBERSHIP"; state: "PENDING" | "ENDED" | "LAPSED" }
   | { code: "NOT_OPEN"; opensAt: Date }

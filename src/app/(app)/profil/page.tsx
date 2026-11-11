@@ -76,6 +76,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                 <dt className="text-sm text-muted">DUPR-profil</dt>
                 <dd className="font-semibold">{link.displayName ?? "Ukendt navn"}</dd>
                 <dd className="num text-sm text-muted">ID {link.externalId}</dd>
+                {link.provider === "DUPR" && <dd className="text-sm text-muted">{link.premium ? "DUPR+ medlem" : "DUPR basis"}</dd>}
               </div>
               <div>
                 <dt className="text-sm text-muted">Verificeret rating</dt>
@@ -85,20 +86,27 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
                 </dd>
               </div>
               <div>
-                <dt className="text-sm text-muted">Senest synkroniseret</dt>
+                <dt className="text-sm text-muted">{link.provider === "DUPR" ? "Senest opdateret" : "Senest synkroniseret"}</dt>
                 <dd className="font-semibold">{link.lastSuccessfulSyncAt ? formatRelative(link.lastSuccessfulSyncAt) : "Aldrig"}</dd>
                 {link.lastSuccessfulSyncAt && <dd className="text-sm text-muted">{formatDateTime(link.lastSuccessfulSyncAt)}</dd>}
               </div>
             </dl>
             <p className={state.kind === "VERIFIED" ? "text-sm text-muted" : "rounded-[10px] bg-alert-soft p-3 text-sm font-medium text-alert"}>
-              {state.kind === "VERIFIED" ? (state.warning ?? `Ratings opdateres automatisk. En rating, der ikke er hentet inden for ${p.settings.staleAfterDays} dage, skal synkroniseres igen, før du kan booke.`) : ratingStateMessage(state)}
+              {state.kind === "VERIFIED"
+                ? (state.warning ??
+                  (link.provider === "DUPR"
+                    ? "Din rating opdateres automatisk, når DUPR registrerer en ny rated kamp."
+                    : `Ratings opdateres automatisk. En rating, der ikke er hentet inden for ${p.settings.staleAfterDays} dage, skal synkroniseres igen, før du kan booke.`))
+                : state.kind === "NO_RATING" && link.provider === "DUPR"
+                  ? "Du har ingen DUPR-rating endnu. Den kommer automatisk, når du har spillet en rated kamp."
+                  : ratingStateMessage(state)}
             </p>
             <div className="flex flex-wrap items-start gap-3">
               {state.kind === "REVOKED" ? (
                 <form action="/api/dupr/link" method="post">
                   <button className="btn btn-primary">Kobl DUPR til igen</button>
                 </form>
-              ) : (
+              ) : link.provider === "DUPR" ? null : (
                 <SyncButton tone="dark" />
               )}
               <UnlinkButton />

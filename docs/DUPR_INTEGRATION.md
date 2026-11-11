@@ -11,13 +11,13 @@ No part of the app scrapes DUPR, asks for a member's DUPR password, or accepts a
 | Partner token | `POST {partner}/auth/v1.0/token`, header `x-authorization: base64(clientKey:clientSecret)`; valid ~1 h | cached in memory, refreshed on 401 |
 | Member login (SSO) | iframe `{sso}/login-external-app/{base64(clientKey)}`; DUPR posts `userToken`, `refreshToken`, `duprId` to the parent window | `/dupr/forbind` hosts the frame, accepts messages only from DUPR's origin, posts them to `/api/dupr/callback` with the single-use `state` |
 | Identity check | `GET {public}/public/user/info` with the member's token | the linked DUPR ID is the one DUPR returns, never the posted one |
-| User gating | `POST {public}/subscription/active`; `BASIC_L1` required | checked at link time and again at most every 24 h (refresh rotates both tokens). No `BASIC_L1` → status `RESTRICTED`: rated sessions and DUPR events blocked, open sessions allowed |
-| Rating | `GET {partner}/user/v1.0/{duprId}`; ratings are strings, `"NR"` = not rated | daily scheduled sync, member's "Synkronisér nu", webhooks |
-| Rating webhook | `POST {partner}/v1.0/webhook` (register), `POST/DELETE {partner}/user/v1.0/subscribe/webhook-event` (per member) | Admin › DUPR-synk › "Registrér webhook hos DUPR"; members are subscribed on link and unsubscribed on unlink |
+| User gating | `POST {public}/subscription/active`; `BASIC_L1` required, `PREMIUM_L1` = DUPR+ | checked at link time and again at most every 24 h (refresh rotates both tokens). No `BASIC_L1` → status `RESTRICTED`: rated sessions and DUPR events blocked, open sessions allowed. Programmes can be marked **Kræver DUPR+** (Admin › Hold); then only members with `PREMIUM_L1` can book |
+| Rating | `GET {partner}/user/v1.0/{duprId}`; ratings are strings, `"NR"` = not rated | fetched **once, when the member links** (and on an admin retry of a link whose first fetch failed). Never polled, per DUPR's review (11 Nov 2026) |
+| Rating webhook | `POST {partner}/v1.0/webhook` (register), `POST/DELETE {partner}/user/v1.0/subscribe/webhook-event` (per member) | the only way ratings change after linking: RATING / RATING_SEED events carry the new rating, which is applied directly. Admin › DUPR-synk › "Registrér webhook hos DUPR"; members are subscribed on link and unsubscribed on unlink. Webhook-driven ratings don't expire (`staleAfterDays` applies only to the mock provider) |
 
 Hosts: UAT partner `https://uat.mydupr.com/api`, public `https://api.uat.dupr.gg`, SSO `https://uat.dupr.gg`. Production partner `https://prod.mydupr.com/api`, public `https://api.dupr.gg`, SSO `https://dashboard.dupr.com`. Chosen by `DUPR_ENV`.
 
-**Webhooks are not signed by DUPR.** The URL we register carries our own secret as its last path segment (`/api/dupr/webhook/<DUPR_WEBHOOK_SECRET>`; `?key=` also works), answers DUPR’s registration handshake (GET or POST) with 200, webhooks for another `clientId` are rejected, and the rating in the payload is never used: it only tells us whose rating to fetch again.
+**Webhooks are not signed by DUPR.** Because the rating in the payload is applied, the URL we register carries our own secret as its last path segment (`/api/dupr/webhook/<DUPR_WEBHOOK_SECRET>`; `?key=` also works), answers DUPR’s registration handshake (GET or POST) with 200, and webhooks for another `clientId` are ignored.
 
 Member tokens are read-only and stored AES-256-GCM encrypted (`src/lib/secretbox.ts`, key derived from `BETTER_AUTH_SECRET`). Our own failing keys never revoke members (401 on partner calls → retry later); a 403 on a member's rating, or dead member tokens, mark the link `REVOKED` and ask the member to connect again.
 
@@ -43,7 +43,10 @@ Switching from mock to live makes mock links show as "not verifiable" until memb
 - [x] DUPR rating shown on the profile and kept updated (webhooks + daily sync).
 - [x] User gating on `BASIC_L1`, cached at most 24 h.
 - [x] Support contact for members: `/kontakt`, linked in the footer and the DUPR section of the profile.
-- [ ] Match upload: not used (training platform, no match results).
+- [x] Match upload: DUPR granted an exception (11 Nov 2026) because the platform only books coached training. If games, leagues or competitive play are added later, results must be submitted to DUPR.
+- [x] No polling: daily rating fetch removed; webhook only (DUPR review feedback, 11 Nov 2026).
+- [x] PREMIUM_L1 gating option on programmes ("Kræver DUPR+").
+- [ ] Review call: walk through SSO login, ratings and webhooks, BASIC_L1 and PREMIUM_L1 gating.
 - [ ] Club integration: not used yet.
 - [x] Tested on UAT (9 Nov 2026): SSO link, identity check, entitlements, rating fetch (NR), subscribe, webhook handshake. RATING_SEED not yet observed.
 - [ ] Review request to tech@mydupr.com (Client ID in the subject): platform URL, test accounts, compliance summary with test steps. Review takes up to 10 business days.

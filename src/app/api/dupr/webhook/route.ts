@@ -9,9 +9,9 @@ import { ProviderError } from "@/server/dupr/types";
 export const dynamic = "force-dynamic";
 
 /**
- * Rating-change webhook. The payload only tells us *which* DUPR IDs to
- * refresh; ratings are always re-fetched from the provider API, so a forged
- * or replayed payload can never set a rating.
+ * Rating-change webhook. DUPR posts the member's new rating (RATING, and
+ * RATING_SEED on subscribe); the URL carries our secret, so only DUPR can
+ * call it. Events without a rating make us re-fetch it (polled providers).
  */
 /** DUPR checks that the URL answers before it accepts the registration. */
 export async function GET() {
@@ -39,14 +39,14 @@ export async function POST(req: Request) {
 
   const links = event.externalIds.length
     ? await db
-        .select({ id: duprLink.id })
+        .select({ id: duprLink.id, externalId: duprLink.externalId })
         .from(duprLink)
         .where(and(eq(duprLink.provider, provider.key), inArray(duprLink.externalId, event.externalIds)))
     : [];
   let synced = 0;
   for (const l of links) {
     try {
-      await syncLink(l.id, "WEBHOOK");
+      await syncLink(l.id, "WEBHOOK", event.ratings?.[l.externalId]);
       synced++;
     } catch (e) {
       console.error("[webhook] sync failed", l.id, e);

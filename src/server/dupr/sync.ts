@@ -53,7 +53,14 @@ export interface SyncOutcome {
   changed: boolean;
 }
 
-export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOutcome> {
+/**
+ * Refreshes one link. `pushed` is a rating delivered by the provider's webhook;
+ * without it the rating is fetched from the provider — except for webhook-only
+ * providers (DUPR), which are fetched only when the member links (or when an
+ * admin retries a link whose first fetch failed). Their scheduled runs only
+ * re-check the member's entitlements.
+ */
+export async function syncLink(linkId: string, trigger: Trigger, pushed?: ProviderRating): Promise<SyncOutcome> {
   const started = Date.now();
   const [link] = await db.select().from(duprLink).where(eq(duprLink.id, linkId));
   if (!link) throw new DomainError("NOT_FOUND", "DUPR-forbindelsen findes ikke.");
@@ -98,6 +105,7 @@ export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOu
           accessTokenEnc: seal(check.credentials.accessToken),
           refreshTokenEnc: seal(check.credentials.refreshToken),
           accessCheckedAt: now,
+          premium: check.premium,
           status: restricted ? "RESTRICTED" : link.status === "RESTRICTED" ? "ACTIVE" : link.status,
         })
         .where(eq(duprLink.id, link.id));
@@ -108,9 +116,16 @@ export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOu
     }
   }
 
+  const mayFetch = !provider.ratingsByWebhookOnly || trigger === "LINK" || (trigger === "ADMIN_RETRY" && !link.lastSuccessfulSyncAt);
+  if (!pushed && !mayFetch) {
+    // Nothing to fetch: the webhook keeps the rating current. Come back for the next entitlement check.
+    await db.update(duprLink).set({ nextSyncAfter: new Date(now.getTime() + ACCESS_RECHECK_MS) }).where(eq(duprLink.id, link.id));
+    return { result: "NO_CHANGE", changed: false };
+  }
+
   let fetched: ProviderRating;
   try {
-    const raw = await provider.getRating(link.externalId);
+    const raw = pushed ?? (await provider.getRating(link.externalId));
     fetched = { doubles: validRating(raw.doubles), singles: validRating(raw.singles) };
   } catch (err) {
     return handleFailure(link, err, trigger, now, log);
@@ -131,7 +146,7 @@ export async function syncLink(linkId: string, trigger: Trigger): Promise<SyncOu
         lastSuccessfulSyncAt: now,
         lastError: null,
         consecutiveFailures: 0,
-        nextSyncAfter: new Date(now.getTime() + settings.syncIntervalHours * 3600_000),
+        nextSyncAfter: new Date(now.getTime() + (provider.ratingsByWebhookOnly ? ACCESS_RECHECK_MS : settings.syncIntervalHours * 3600_000)),
       })
       .where(eq(duprLink.id, link.id));
     if ((changed || !hasSnapshot) && (fetched.doubles !== null || fetched.singles !== null)) {
@@ -220,6 +235,9 @@ async function handleFailure(
 export async function manualSync(actor: Actor) {
   const [link] = await db.select().from(duprLink).where(eq(duprLink.userId, actor.id));
   if (!link) throw new DomainError("NOT_FOUND", "Du har ikke koblet en DUPR-profil til.");
+  if (providerFor(link.provider)?.ratingsByWebhookOnly) {
+    throw new DomainError("VALIDATION", "Din rating opdateres automatisk, når DUPR registrerer en ny kamp.");
+  }
   await rateLimit(`sync:${actor.id}:burst`, 1, 60, "Du kan synkronisere igen om et minut.");
   await rateLimit(`sync:${actor.id}:hour`, 6, 3600, "Du har synkroniseret mange gange den seneste time. Prøv igen senere.");
   return syncLink(link.id, "MANUAL");

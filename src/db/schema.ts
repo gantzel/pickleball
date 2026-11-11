@@ -236,6 +236,8 @@ export const duprLink = pgTable(
     accessTokenEnc: text("access_token_enc"),
     refreshTokenEnc: text("refresh_token_enc"),
     accessCheckedAt: ts("access_checked_at"),
+    /** DUPR+ subscriber (PREMIUM_L1 entitlement), from the same entitlement check. */
+    premium: boolean("premium").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -334,6 +336,8 @@ export const trainingLevel = pgTable(
     maxRating: rating("max_rating"),
     /** LEVEL: members with a linked DUPR profile but no rating yet may book (beginners). */
     allowUnrated: boolean("allow_unrated").notNull().default(false),
+    /** Members need DUPR+ (DUPR's PREMIUM_L1 entitlement) to book this programme's sessions. */
+    requiresDuprPremium: boolean("requires_dupr_premium").notNull().default(false),
     color: text("color").notNull().default("#2f6b4f"),
     /** Optional cover photo for session cards (key in file storage, 16:9 WebP). */
     imageKey: text("image_key"),

@@ -70,6 +70,12 @@ type RuleLike =
 
 /** Short Danish description of who may book. */
 export function ruleRangeLabel(rule: RuleLike): string {
+  const base = baseRuleLabel(rule);
+  if (!(rule as { premium?: boolean }).premium) return base;
+  return rule.kind === "OPEN" || rule.kind === "DUPR_LINKED" ? "Kræver DUPR+" : `${base} · DUPR+`;
+}
+
+function baseRuleLabel(rule: RuleLike): string {
   switch (rule.kind) {
     case "OPEN":
       return "Åben for alle";

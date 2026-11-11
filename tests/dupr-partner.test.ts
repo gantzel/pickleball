@@ -11,10 +11,10 @@ import { open, seal } from "@/lib/secretbox";
 import { bookSession } from "@/server/bookings";
 import { completeLink, startLink, unlink } from "@/server/dupr/link";
 import { parseDuprRating, resetPartnerTokenCache } from "@/server/dupr/partner";
-import { syncLink } from "@/server/dupr/sync";
+import { manualSync, runScheduledSync, syncLink } from "@/server/dupr/sync";
 import { getSessionForMember } from "@/server/sessions";
 import { POST as webhookPOST } from "@/app/api/dupr/webhook/route";
-import { getLink, makeSession, makeUser, resetDb } from "./helpers";
+import { getLink, makeLevel, makeSession, makeUser, resetDb } from "./helpers";
 
 const PARTNER = "https://uat.mydupr.com/api";
 const PUBLIC = "https://api.uat.dupr.gg";
@@ -24,6 +24,7 @@ interface Fake {
   /** Which member access token belongs to which DUPR ID. */
   tokens: Record<string, string>;
   basic: Record<string, boolean>;
+  premium: Record<string, boolean>;
   refreshOk: boolean;
   calls: { method: string; url: string; headers: Record<string, string>; body?: string }[];
 }
@@ -60,7 +61,8 @@ function stubDupr() {
     if (url === `${PUBLIC}/subscription/active`) {
       const id = fake.tokens[bearer];
       if (!id) return reply(401, {});
-      return reply(200, { subscriptions: fake.basic[id] ? [{ status: "active", displayName: "DUPR", entitlements: { tournaments: ["BASIC_L1"] } }] : [] });
+      const tournaments = [...(fake.basic[id] ? ["BASIC_L1"] : []), ...(fake.premium[id] ? ["PREMIUM_L1"] : [])];
+      return reply(200, { subscriptions: tournaments.length ? [{ status: "active", displayName: fake.premium[id] ? "DUPR+" : "DUPR", entitlements: { tournaments } }] : [] });
     }
     if (url === `${PUBLIC}/auth/v2.0/refresh`) {
       const id = fake.tokens[bearer];
@@ -78,7 +80,7 @@ beforeEach(async () => {
   Object.assign(process.env, { DUPR_PROVIDER: "dupr", DUPR_ENV: "uat", DUPR_CLIENT_ID: "5787", DUPR_CLIENT_KEY: "ck-test", DUPR_CLIENT_SECRET: "cs-test" });
   resetEnvCache();
   resetPartnerTokenCache();
-  fake = { ratings: {}, tokens: {}, basic: {}, refreshOk: true, calls: [] };
+  fake = { ratings: {}, tokens: {}, basic: {}, premium: {}, refreshOk: true, calls: [] };
   stubDupr();
 });
 
@@ -90,10 +92,11 @@ afterEach(() => {
 });
 
 /** A member logs in with DUPR in the embedded frame; the page posts DUPR's answer to us. */
-async function linkViaSso(actor: { id: string; role: "MEMBER" | "ADMIN" }, duprId: string, opts: { doubles?: string; basic?: boolean; claimed?: string } = {}) {
+async function linkViaSso(actor: { id: string; role: "MEMBER" | "ADMIN" }, duprId: string, opts: { doubles?: string; basic?: boolean; premium?: boolean; claimed?: string } = {}) {
   fake.ratings[duprId] = { doubles: opts.doubles ?? "3.512", singles: "NR" };
   fake.tokens[`ut-${duprId}`] = duprId;
   fake.basic[duprId] = opts.basic ?? true;
+  fake.premium[duprId] = opts.premium ?? false;
   const url = new URL(await startLink(actor));
   expect(url.pathname).toBe("/dupr/forbind");
   return completeLink(
@@ -158,7 +161,7 @@ describe("DUPR partner provider", () => {
 
     // Within 24 hours no new check is made.
     const before = fake.calls.length;
-    await syncLink(l.id, "MANUAL");
+    await syncLink(l.id, "SCHEDULED");
     expect(fake.calls.slice(before).some((c) => c.url.includes("/refresh"))).toBe(false);
 
     await db.update(duprLink).set({ accessCheckedAt: new Date(Date.now() - 25 * 3600_000) }).where(eq(duprLink.id, l.id));
@@ -177,12 +180,14 @@ describe("DUPR partner provider", () => {
     expect((await syncLink(la.id, "SCHEDULED")).result).toBe("REVOKED");
     expect((await getLink(a.id)).status).toBe("REVOKED");
 
+    // An admin retry of a link whose first fetch failed gets a 403: the member must reconnect.
     const b = await makeUser();
     fake.refreshOk = true;
     await linkViaSso(b, "FB4031");
     fake.ratings.FB4031 = 403;
     const lb = await getLink(b.id);
-    expect((await syncLink(lb.id, "MANUAL")).result).toBe("REVOKED");
+    await db.update(duprLink).set({ lastSuccessfulSyncAt: null, status: "ERROR" }).where(eq(duprLink.id, lb.id));
+    expect((await syncLink(lb.id, "ADMIN_RETRY")).result).toBe("REVOKED");
   });
 
   it("our own key failing never revokes members", async () => {
@@ -192,16 +197,15 @@ describe("DUPR partner provider", () => {
     resetEnvCache();
     resetPartnerTokenCache();
     const l = await getLink(m.id);
-    expect((await syncLink(l.id, "MANUAL")).result).toBe("FAILED");
+    await db.update(duprLink).set({ lastSuccessfulSyncAt: null }).where(eq(duprLink.id, l.id));
+    expect((await syncLink(l.id, "ADMIN_RETRY")).result).toBe("FAILED");
     expect((await getLink(m.id)).status).toBe("ERROR");
   });
 
-  it("webhooks need our secret in the URL and only trigger a re-fetch", async () => {
+  it("webhooks need our secret in the URL and carry the new rating (no fetch)", async () => {
     const m = await makeUser();
     await linkViaSso(m, "WH1234", { doubles: "3.100" });
-    fake.ratings.WH1234 = { doubles: "3.250", singles: "NR" };
-    // The payload's rating is ignored: we fetch it from DUPR.
-    const body = JSON.stringify({ clientId: "5787", event: "RATING", message: { duprId: "WH1234", rating: { doubles: "7.9" } } });
+    const body = JSON.stringify({ clientId: "5787", event: "RATING", message: { duprId: "WH1234", rating: { doubles: "3.250", singles: "NR" } } });
     const bad = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook?key=nope", { method: "POST", body }));
     expect(bad.status).toBe(401);
     // Another client's event, or DUPR's registration handshake: acknowledged, nothing synced.
@@ -211,10 +215,63 @@ describe("DUPR partner provider", () => {
     const r2 = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook/test-webhook-secret", { method: "POST", body: "ping" }));
     expect(r2.status).toBe(200);
     expect((await getLink(m.id)).doublesRating).toBe(3.1);
-    // The secret can be the last path segment (as registered) or ?key=.
+    const before = fake.calls.length;
     const ok = await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook/test-webhook-secret", { method: "POST", body }));
     expect(await ok.json()).toMatchObject({ ok: true, synced: 1 });
     expect((await getLink(m.id)).doublesRating).toBe(3.25);
+    expect(fake.calls.slice(before).some((c) => c.url.includes("/user/v1.0/WH1234"))).toBe(false);
+    // RATING_SEED for a player without a rating yet.
+    const seed = JSON.stringify({ clientId: "5787", event: "RATING_SEED", message: { duprId: "WH1234", rating: null } });
+    await webhookPOST(new Request("http://localhost:3000/api/dupr/webhook?key=test-webhook-secret", { method: "POST", body: seed }));
+    expect((await getLink(m.id)).doublesRating).toBeNull();
+  });
+
+  it("never polls DUPR for ratings after linking, and DUPR ratings don't expire", async () => {
+    const m = await makeUser();
+    await linkViaSso(m, "NP1234", { doubles: "3.200" });
+    const l = await getLink(m.id);
+    expect(fake.calls.filter((c) => c.url.includes("/user/v1.0/NP1234"))).toHaveLength(1); // the fetch at link time
+    // Scheduled runs only re-check entitlements; the member can't trigger a fetch either.
+    await db.update(duprLink).set({ accessCheckedAt: new Date(Date.now() - 25 * 3600_000), nextSyncAfter: new Date(0) }).where(eq(duprLink.id, l.id));
+    await runScheduledSync();
+    await expect(manualSync(m)).rejects.toMatchObject({ code: "VALIDATION" });
+    expect(fake.calls.filter((c) => c.url.includes("/user/v1.0/NP1234"))).toHaveLength(1);
+    expect(fake.calls.some((c) => c.url.endsWith("/auth/v2.0/refresh"))).toBe(true);
+    // Two months without a match: the rating still counts.
+    await db.update(duprLink).set({ lastSuccessfulSyncAt: new Date(Date.now() - 60 * 86400_000) }).where(eq(duprLink.id, l.id));
+    const s = await makeSession({ minRating: 3.0, maxRating: 3.5 });
+    await expect(bookSession(m, s.id)).resolves.toMatchObject({ status: "CONFIRMED" });
+  });
+
+  it("programmes can require DUPR+ (PREMIUM_L1), re-checked daily", async () => {
+    const level = await makeLevel({ requiresDuprPremium: true });
+    const s = await makeSession({ levelId: level.id });
+    const basic = await makeUser();
+    await linkViaSso(basic, "BA1234", { doubles: "3.200" });
+    expect((await getSessionForMember(basic, s.id)).availability).toEqual({ code: "PREMIUM_NEEDED" });
+    await expect(bookSession(basic, s.id)).rejects.toMatchObject({ code: "NOT_ELIGIBLE", message: expect.stringContaining("DUPR+") });
+
+    const plus = await makeUser();
+    await linkViaSso(plus, "PL1234", { doubles: "3.200", premium: true });
+    expect((await getLink(plus.id)).premium).toBe(true);
+    await expect(bookSession(plus, s.id)).resolves.toMatchObject({ status: "CONFIRMED" });
+
+    // Without DUPR at all, the member is told to link first.
+    const none = await makeUser();
+    expect((await getSessionForMember(none, s.id)).availability.code).toBe("VERIFY_NEEDED");
+
+    // Upgrading at DUPR unlocks it at the next daily check.
+    const lb = await getLink(basic.id);
+    fake.premium.BA1234 = true;
+    await db.update(duprLink).set({ accessCheckedAt: new Date(Date.now() - 25 * 3600_000) }).where(eq(duprLink.id, lb.id));
+    await syncLink(lb.id, "SCHEDULED");
+    await expect(bookSession(basic, s.id)).resolves.toMatchObject({ status: "CONFIRMED" });
+
+    // DUPR+ on an open programme: linked + premium required.
+    const social = await makeLevel({ kind: "SOCIAL", minRating: null, maxRating: null, requiresDuprPremium: true });
+    const open_ = await makeSession({ levelId: social.id, minRating: null });
+    expect((await getSessionForMember(none, open_.id)).availability.code).toBe("DUPR_NEEDED");
+    expect((await getSessionForMember(plus, open_.id)).availability.code).toBe("AVAILABLE");
   });
 
   it("unlinking unsubscribes from DUPR's rating webhook", async () => {

@@ -224,6 +224,7 @@ export interface LevelValues {
   minRating: number | null;
   maxRating: number | null;
   allowUnrated: boolean;
+  requiresDuprPremium: boolean;
   color: string;
   sortOrder: number;
 }
@@ -269,6 +270,12 @@ export function LevelForm({ level, nextSort = 0 }: { level?: LevelValues; nextSo
             Nye spillere uden DUPR-rating må booke
           </label>
         </div>
+      )}
+      {kind !== "JUNIOR" && (
+        <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-3">
+          <input type="checkbox" name="requiresDuprPremium" defaultChecked={level?.requiresDuprPremium ?? false} className="h-5 w-5" />
+          Kræver DUPR+ (kun medlemmer med DUPR&apos;s premium-abonnement kan booke)
+        </label>
       )}
       <div className="sm:col-span-3">
         <label className="label" htmlFor={`ld-${k}`}>Beskrivelse</label>

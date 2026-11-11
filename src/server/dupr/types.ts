@@ -19,10 +19,13 @@ export interface ProviderIdentity {
   credentials?: MemberCredentials;
   /** True when DUPR says the member may not take part in play (no BASIC_L1 entitlement). */
   restricted?: boolean;
+  /** DUPR+ subscriber (PREMIUM_L1 entitlement). */
+  premium?: boolean;
 }
 
 export interface AccessCheck {
   restricted: boolean;
+  premium: boolean;
   /** Tokens rotate on refresh: always store these. */
   credentials: MemberCredentials;
 }
@@ -45,8 +48,10 @@ export class ProviderError extends Error {
 }
 
 export interface WebhookEvent {
+  /** Ratings carried by the event itself, keyed by DUPR ID (push providers). */
+  ratings?: Record<string, ProviderRating>;
   eventId: string;
-  /** DUPR IDs whose rating may have changed. Ratings are always re-fetched, never trusted from the payload. */
+  /** DUPR IDs whose rating may have changed. Without `ratings` for an ID, its rating is re-fetched. */
   externalIds: string[];
 }
 
@@ -57,6 +62,8 @@ export interface RatingProvider {
   isReady(): boolean;
   /** URL where the member proves ownership of their DUPR profile. */
   authorizeUrl(params: { state: string; redirectUri: string }): string;
+  /** Ratings are pushed by webhook after the initial fetch at link time; never polled. */
+  ratingsByWebhookOnly?: boolean;
   /** For providers whose login runs in an embedded frame: the frame URL and the origin its messages come from. */
   ssoEmbed?(): { url: string; origin: string };
   /** Re-checks the member's entitlements with their own tokens. Throws ProviderError("REVOKED") if the tokens are dead. */
