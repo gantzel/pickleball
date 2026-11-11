@@ -27,11 +27,16 @@ export interface SessionFormValues {
   bookingClosesAt?: string;
 }
 
-export interface LevelOption { id: string; name: string; kind: string; minRating: number | null; maxRating: number | null }
+export interface LevelOption { id: string; name: string; kind: string; minRating: number | null; maxRating: number | null; requiresDuprPremium?: boolean }
 
 /** What a programme means for a session's access, in admin language. */
 function levelAccessText(l: LevelOption | undefined) {
   if (!l) return "Ingen hold: angiv evt. egne ratinggrænser. Uden grænser er træningen åben for alle.";
+  const base = baseAccessText(l);
+  return l.requiresDuprPremium && l.kind !== "JUNIOR" ? `Kræver DUPR+ (DUPR's premium-abonnement). ${l.kind === "SOCIAL" ? "Angiv evt. ratinggrænser for netop denne træning." : base}` : base;
+}
+
+function baseAccessText(l: LevelOption) {
   switch (l.kind) {
     case "LEVEL":
       return `Adgang følger holdets ratinggrænser (${formatBand(l.minRating, l.maxRating, true)}) og flytter automatisk med medlemmernes rating.`;
